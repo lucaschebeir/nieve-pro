@@ -523,7 +523,7 @@ function AdminApp() {
   const { staffProfile, signOut, isAdmin, session } = useAuth();
   const { staff, loading: sL, toggleActive, saveStaff } = useStaff();
   const { clients, loading: cL, saveClient } = useClients();
-  const { classes, loading: clL, saveClass } = useClasses();
+  const { classes, loading: clL, saveClass, deleteClass } = useClasses();
   const { settlements, loading: stL, settlePeriod } = useSettlements();
   const { expenses, loading: eL, addExpense } = useExpenses();
   const { config, saveConfig } = useConfig();
@@ -643,7 +643,7 @@ function AdminApp() {
       {/* PAGES */}
       <div style={{padding:24,maxWidth:1360,margin:"0 auto"}}>
         {page==="dashboard"&&<DashboardPage staff={staff} classes={classes} settlements={settlements} clients={clients} getBalance={getBalance} onSettle={s=>setModal({type:"settle",data:{staffId:s.id,name:s.name}})} onToggle={handleToggle} onViewStaff={s=>{setSelectedStaffId(s.id);setPage("staff");}}/>}
-        {page==="classes"  &&<ClassesPage classes={classes} staff={staff} clients={clients} onEdit={c=>setModal({type:"class_edit",data:c})} onNew={()=>setModal({type:"class_edit",data:null})} onClientClick={goToClient} onFinanceClick={c=>setModal({type:"class_finance",data:c})}/>}
+        {page==="classes"  &&<ClassesPage classes={classes} staff={staff} clients={clients} onEdit={c=>setModal({type:"class_edit",data:c})} onNew={()=>setModal({type:"class_edit",data:null})} onClientClick={goToClient} onFinanceClick={c=>setModal({type:"class_finance",data:c})}onDelete={async(id)=>{await deleteClass(id);showToast("✓ Clase eliminada")}}/>}
         {page==="clients"  &&<ClientsPage clients={clients} staff={staff} classes={classes} selectedClientId={selectedClientId} onClearSelected={()=>setSelectedClientId(null)} onEdit={c=>setModal({type:"client_edit",data:c})} onNew={()=>setModal({type:"client_edit",data:null})}/>}
         {page==="staff"    &&<StaffPage staff={staff} getBalance={getBalance} settlements={settlements} clients={clients} classes={classes} selectedStaffId={selectedStaffId} onClearSelected={()=>setSelectedStaffId(null)} onToggle={handleToggle} onEdit={s=>setModal({type:"staff_edit",data:s})} onNew={()=>setModal({type:"staff_edit",data:null})} onSettle={s=>setModal({type:"settle",data:{staffId:s.id,name:s.name}})}/>}
         {page==="finanzas" &&<FinanzasPage classes={classes} expenses={expenses} staff={staff} onAddExpense={addExpense}/>}
@@ -729,7 +729,7 @@ function DashboardPage({staff,classes,settlements,clients,getBalance,onSettle,on
   );
 }
 
-function ClassesPage({classes,staff,clients,onEdit,onNew,onClientClick,onFinanceClick}){
+function ClassesPage({classes,staff,clients,onEdit,onNew,onClientClick,onFinanceClick,onDelete}){
   const [payF,setPayF]=useState("all");
   const [instrF,setInstrF]=useState("all");
   const [settF,setSettF]=useState("pending");
@@ -787,7 +787,7 @@ function ClassesPage({classes,staff,clients,onEdit,onNew,onClientClick,onFinance
                   <TD>{instr?<div><div style={{display:"flex",alignItems:"center",gap:6,fontSize:12}}><Av name={instr.name} size={22} color={T.purple}/>{instr.name}</div><InstrBadge status={c.instructorStatus}/></div>:<InstrBadge status="unassigned"/>}</TD>
                   <TD style={{fontFamily:"monospace",color:T.accent,fontWeight:700}}>{fmt(staffE)}</TD>
                   <TD><Badge text={c.isSettled?"LIQ.":"PEND."} color={c.isSettled?T.muted:T.gold} small dot={!c.isSettled}/></TD>
-                  <TD><Btn variant="ghost" size="sm" onClick={()=>onEdit(c)}>✎</Btn></TD>
+                  <TD><div style={{display:"flex",gap:6}}><Btn variant="ghost" size="sm" onClick={()=>onEdit(c)}>✎</Btn><Btn variant="danger" size="sm" onClick={()=>{if(window.confirm("¿Eliminar esta clase?"))onDelete(c.id)}}>✕</Btn></div></TD>
                 </tr>
               );
             })}

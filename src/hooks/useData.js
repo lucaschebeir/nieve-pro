@@ -158,7 +158,28 @@ export function useClasses() {
     const paidAmount = isNew
       ? (+formData.reservationAmount || 0)
       : (+formData.paidAmount || 0);
-
+// Si hay nombre de cliente pero no clientId, crear el cliente automáticamente
+    if (formData.clientName && !formData.clientId) {
+      const { data: existing } = await supabase
+        .from("clients")
+        .select("id")
+        .ilike("name", formData.clientName.trim())
+        .limit(1);
+      
+      if (existing && existing.length > 0) {
+        formData.clientId = existing[0].id;
+      } else {
+        const { data: newClient } = await supabase
+          .from("clients")
+          .insert({
+            name: formData.clientName.trim(),
+            assigned_seller: formData.sellerId || null,
+          })
+          .select()
+          .single();
+        if (newClient) formData.clientId = newClient.id;
+      }
+    }
     const payload = {
       class_date:          formData.classDate,
       class_type_id:       formData.classTypeId || null,
@@ -221,7 +242,16 @@ export function useClasses() {
     createdAt:           c.created_at?.split("T")[0],
   }));
 
-  return { classes: mapped, loading, error, refetch, saveClass };
+  async function deleteClass(classId) {
+    const { error } = await supabase
+      .from("classes")
+      .delete()
+      .eq("id", classId);
+    if (error) throw error;
+    refetch();
+  }
+
+  return { classes: mapped, loading, error, refetch, saveClass, deleteClass };
 }
 
 // ─── SETTLEMENTS ──────────────────────────────────────────────
