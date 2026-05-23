@@ -6,7 +6,7 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
   const [staffProfile, setStaffProfile] = useState(null);
-
+  const [isRecovery, setIsRecovery] = useState(false);
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
@@ -22,6 +22,7 @@ export function AuthProvider({ children }) {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+  if (_e === "PASSWORD_RECOVERY") setIsRecovery(true);
   setSession(session);
   if (session?.user?.id) {
     supabase
@@ -59,6 +60,7 @@ export function AuthProvider({ children }) {
       staffProfile,
       loading: false,
       isAdmin: staffProfile?.role === "admin",
+      isRecovery,
       signIn,
       signOut,
     }}>
