@@ -575,25 +575,89 @@ function AdminApp() {
 
   function handleExport() {
     const wb = XLSX.utils.book_new();
+    const fecha = new Date().toISOString().split("T")[0];
+
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(classes.map(c => ({
       Fecha: c.classDate, Tipo: c.classTypeName, Cliente: c.clientName,
-      Monto: c.amount, Reserva: c.reservationAmount, Pagado: c.paidAmount,
+      Personas: c.peopleCount, Monto: c.amount, Seña: c.reservationAmount,
+      Pagado: c.paidAmount, Saldo: c.amount - c.paidAmount,
       "Est.Pago": PAY_STATUS[c.paymentStatus]?.label,
       "Est.Instructor": INSTR_STATUS[c.instructorStatus]?.label,
       Vendedor: staff.find(s=>s.id===c.sellerId)?.name||"",
       Instructor: staff.find(s=>s.id===c.instructorId)?.name||"",
       Escenario: SCENARIO_LABELS[c.scenario],
-      "Comisión Vend": c.sellerCommission, "Honor. Instr": c.instructorEarning,
-      "Escuela": c.schoolCut, Liquidada: c.isSettled?"Sí":"No", Notas: c.notes,
+      "Comisión Vendedor": c.sellerCommission, "Honorario Instructor": c.instructorEarning,
+      "Escuela Retiene": c.schoolCut, Liquidada: c.isSettled?"Sí":"No", Notas: c.notes,
     }))), "Clases");
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(clients.map(c => ({
-      Nombre: c.name, Teléfono: c.phone, Email: c.email, Notas: c.notes,
-      Vendedor: staff.find(s=>s.id===c.sellerId)?.name||"",
-    }))), "Clientes");
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(expenses.map(e => ({
-      Fecha: e.date, Monto: e.amount, Descripción: e.description, Categoría: e.category,
-    }))), "Gastos");
-    XLSX.writeFile(wb, "nievepro_reporte.xlsx");
+
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(clients.map(c => {
+      const vendedor = staff.find(s=>s.id===c.sellerId);
+      const cls = classes.filter(x=>x.clientId===c.id||x.clientName?.toLowerCase()===c.name?.toLowerCase());
+      return { Nombre: c.name, Teléfono: c.phone||"", Email: c.email||"",
+        Vendedor: vendedor?.name||"Sin asignar", "Total Clases": cls.length,
+        "Total Gastado": cls.reduce((a,x)=>a+x.amount,0),
+        "Total Cobrado": cls.reduce((a,x)=>a+x.paidAmount,0),
+        "Saldo Pendiente": cls.reduce((a,x)=>a+(x.amount-x.paidAmount),0), Notas: c.notes||"" };
+    })), "Clientes");
+
+    staff.forEach(s2 => {
+      const hist2 = settlements.filter(st=>st.staffId===s2.id).reduce((a,st)=>a+st.totalEarned,0);
+      const misClases2 = classes.filter(c=>c.sellerId===s2.id||c.instructorId===s2.id);
+      const misClientes2 = clients.filter(c=>c.sellerId===s2.id);
+      const misLiquidaciones2 = settlements.filter(st=>st.staffId===s2.id);
+      const aPagar = misClases2.filter(c=>!c.isSettled).reduce((a,c)=>{
+        const isPureInstr = c.instructorId===s2.id && c.sellerId!==s2.id;
+        return a + (isPureInstr ? c.instructorEarning : c.sellerCommission);
+      },0);
+      const hojaStaff = [
+        [`━━━ ${s2.name.toUpperCase()} ━━━`],
+        ["Email", s2.email||"", "Teléfono", s2.phone||""],
+        ["Rol", ROLE_LABELS[s2.role], "Activo", s2.isActive?"Sí":"No"],
+        ["Comisión %", s2.commissionPct, "Tarifa/hora", s2.hourlyRate],
+        ["A Pagar", aPagar, "Total Liquidado", hist2],
+        [],
+        ["CLASES"],["Fecha","Cliente","Tipo","Monto","Mi Ganancia","Est.Pago","Liquidada"],
+        ...misClases2.map(c=>{
+          const isPureInstr=c.instructorId===s2.id&&c.sellerId!==s2.id;
+          const earn=isPureInstr?c.instructorEarning:c.sellerCommission;
+          return[c.classDate,c.clientName,c.classTypeName,c.amount,earn,PAY_STATUS[c.paymentStatus]?.label,c.isSettled?"Sí":"No"];
+        }),
+        [],
+        ["CLIENTES ASIGNADOS"],["Nombre","Teléfono","Email","Clases","Total Gastado"],
+        ...misClientes2.map(cl=>{
+          const cls2=classes.filter(c=>c.clientId===cl.id||c.clientName?.toLowerCase()===cl.name?.toLowerCase());
+          return[cl.name,cl.phone||"",cl.email||"",cls2.length,cls2.reduce((a,c)=>a+c.amount,0)];
+        }),
+        [],
+        ["LIQUIDACIONES"],["Fecha","Periodo","Clases","Monto","Método"],
+        ...misLiquidaciones2.map(st=>[st.settledAt,`${st.periodStart} → ${st.periodEnd}`,st.totalClasses,st.totalEarned,st.method]),
+      ];
+      const nombreHoja = s2.name.substring(0,25).replace(/[^a-zA-Z0-9 ]/g,"").trim();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(hojaStaff), nombreHoja);
+    });
+
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(settlements.map(st=>{
+      const s=staff.find(x=>x.id===st.staffId);
+      return{Fecha:st.settledAt,Staff:s?.name||"","Periodo Inicio":st.periodStart,"Periodo Fin":st.periodEnd,Clases:st.totalClasses,"Total Pagado":st.totalEarned,Método:st.method,Notas:st.notes||""};
+    })), "Liquidaciones");
+
+    const ingresosBrutos=classes.reduce((a,c)=>a+c.paidAmount,0);
+    const totalFacturado=classes.reduce((a,c)=>a+c.amount,0);
+    const totalComisiones=classes.reduce((a,c)=>a+c.sellerCommission,0);
+    const totalInstructores=classes.reduce((a,c)=>a+c.instructorEarning,0);
+    const totalGastos=expenses.reduce((a,e)=>a+e.amount,0);
+    const netoAntes=ingresosBrutos-totalComisiones-totalInstructores;
+    const netoFinal=netoAntes-totalGastos;
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+      ["RESUMEN FINANCIERO"],[],
+      ["Total Facturado",totalFacturado],["Total Cobrado",ingresosBrutos],["Saldo a Cobrar",totalFacturado-ingresosBrutos],[],
+      ["Comisiones Vendedores",totalComisiones],["Honorarios Instructores",totalInstructores],["Neto antes de gastos",netoAntes],[],
+      ["Gastos Operativos",totalGastos],[],["NETO FINAL",netoFinal],[],
+      ["GASTOS DETALLE"],["Fecha","Descripción","Categoría","Monto"],
+      ...expenses.map(e=>[e.date,e.description,e.category,e.amount]),
+    ]), "Finanzas");
+
+    XLSX.writeFile(wb, `nievepro_${fecha}.xlsx`);
     showToast("✓ Excel exportado");
   }
 
