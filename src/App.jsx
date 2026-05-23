@@ -2,6 +2,7 @@
 // App principal conectada a Supabase
 // Usa los hooks de useData.js para todas las operaciones reales
 
+import ResetPasswordScreen from "./components/ResetPasswordScreen";
 import { useState, useMemo, useCallback } from "react";
 import * as XLSX from "xlsx";
 import { useAuth } from "./context/AuthContext";
@@ -1378,7 +1379,9 @@ function StaffPortalPage({ staffMember, staff, classes, settlements, clients, ba
 // ─── ROOT ─────────────────────────────────────────────────────────────────────
 export default function App() {
   const { session, staffProfile } = useAuth();
+  const hash = window.location.hash;
+  if (hash.includes("type=recovery") || hash.includes("access_token")) return <ResetPasswordScreen/>;
   if (!session) return <LoginScreen/>;
-  if (!staffProfile) return <LoginScreen/>;
+  if (!staffProfile) return <div style={{minHeight:"100vh",background:"#080e1a",display:"flex",alignItems:"center",justifyContent:"center",color:"white"}}>Cargando perfil...</div>;
   return <AdminApp/>;
 }
