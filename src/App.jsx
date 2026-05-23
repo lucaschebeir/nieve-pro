@@ -10,6 +10,7 @@ import {
   useStaff, useClients, useClasses,
   useSettlements, useExpenses, useConfig, usePendingBalances
 } from "./hooks/useData";
+import { supabase } from "./supabase";
 
 // ─── THEME ────────────────────────────────────────────────────────────────────
 const T = {
@@ -1114,6 +1115,7 @@ function StaffPortalPage({ staffMember, staff, classes, settlements, clients, ba
             <div style={{ fontSize: 11, color: T.textDim }}>{ROLE_LABELS[staffMember?.role]} · Solo tus datos</div>
           </div>
         </div>
+        <Btn variant="ghost" size="sm" onClick={async()=>{await supabase.auth.resetPasswordForEmail(staffMember?.email);alert("Te mandamos un email para cambiar tu contraseña");}}>🔑 Cambiar contraseña</Btn>
         <Btn variant="ghost" size="sm" onClick={onSignOut}>← Salir</Btn>
       </div>
 
