@@ -1380,7 +1380,7 @@ function StaffPortalPage({ staffMember, staff, classes, settlements, clients, ba
 export default function App() {
   const { session, staffProfile } = useAuth();
   const hash = window.location.hash;
-  if (hash.includes("type=recovery") || hash.includes("access_token")) return <ResetPasswordScreen/>;
+  if (hash.length > 1) return <ResetPasswordScreen/>;
   if (!session) return <LoginScreen/>;
   if (!staffProfile) return <div style={{minHeight:"100vh",background:"#080e1a",display:"flex",alignItems:"center",justifyContent:"center",color:"white"}}>Cargando perfil...</div>;
   return <AdminApp/>;
