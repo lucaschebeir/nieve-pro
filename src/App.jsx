@@ -460,10 +460,16 @@ function ModalStaffEdit({data,config,onSave,onClose}){
           {(form.role==="seller"||form.role==="both")&&<Inp label="Comisión %" type="number" value={String(form.commissionPct)} onChange={v=>setForm(p=>({...p,commissionPct:+v}))}/>}
           {(form.role==="instructor"||form.role==="both")&&<Inp label="$/hora" type="number" value={String(form.hourlyRate)} onChange={v=>setForm(p=>({...p,hourlyRate:+v}))}/>}
         </div>
-        <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <Toggle value={form.isActive} onChange={v=>setForm(p=>({...p,isActive:v}))}/>
-          <span style={{fontSize:13,color:T.textDim}}>Cuenta {form.isActive?"habilitada":"inhabilitada"}</span>
-        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+  <div style={{display:"flex",alignItems:"center",gap:10}}>
+    <Toggle value={form.isActive} onChange={v=>setForm(p=>({...p,isActive:v}))}/>
+    <span style={{fontSize:13,color:T.textDim}}>Cuenta {form.isActive?"habilitada":"inhabilitada"}</span>
+  </div>
+  <div style={{display:"flex",alignItems:"center",gap:10}}>
+    <Toggle value={form.isOwner||false} onChange={v=>setForm(p=>({...p,isOwner:v}))}/>
+    <span style={{fontSize:13,color:T.gold}}>⭐ Instructor dueño (cobra 100%)</span>
+  </div>
+</div>
         {!data&&<div style={{background:`${T.gold}10`,border:`1px solid ${T.gold}30`,borderRadius:8,padding:12,fontSize:12,color:T.textDim,lineHeight:1.7}}>⚠ Después de crear el perfil, creá el usuario en Supabase Authentication con el mismo email y vinculalo con UPDATE staff SET user_id='...'</div>}
       </div>
       <div style={{display:"flex",gap:10,marginTop:18}}>

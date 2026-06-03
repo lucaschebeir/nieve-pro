@@ -57,6 +57,7 @@ export function useStaff() {
           commission_pct: staffData.commissionPct,
           hourly_rate:    staffData.hourlyRate,
           is_active:      staffData.isActive,
+          is_owner:       staffData.isOwner || false,
         })
         .eq("id", staffData.id);
       if (error) throw error;
@@ -71,6 +72,7 @@ export function useStaff() {
           commission_pct: staffData.commissionPct,
           hourly_rate:    staffData.hourlyRate,
           is_active:      staffData.isActive,
+          is_owner:       staffData.isOwner || false,
         });
       if (error) throw error;
     }
@@ -87,6 +89,7 @@ export function useStaff() {
     commissionPct:  s.commission_pct,
     hourlyRate:     s.hourly_rate,
     isActive:       s.is_active,
+    isOwner:        s.is_owner,
     userId:         s.user_id,
   }));
 
