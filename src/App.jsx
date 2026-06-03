@@ -330,10 +330,16 @@ function ModalClassEdit({data,staff,clients,config,onSave,onClose}){
             <Inp label="Vendedor" value={form.sellerId} onChange={v=>set("sellerId",v)} options={sellers.map(s=>({value:s.id,label:s.name}))}/>
             <Inp label="Instructor" value={form.instructorId} onChange={v=>set("instructorId",v)} options={instructors.map(s=>({value:s.id,label:s.name}))}/>
           </div>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <input type="checkbox" id="done" checked={form.classDone} onChange={e=>set("classDone",e.target.checked)} style={{accentColor:T.green,width:16,height:16}}/>
-            <label htmlFor="done" style={{fontSize:13,color:T.text,cursor:"pointer"}}>Clase ya dada</label>
-          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+  <div style={{display:"flex",alignItems:"center",gap:8}}>
+    <input type="checkbox" id="done" checked={form.classDone} onChange={e=>set("classDone",e.target.checked)} style={{accentColor:T.green,width:16,height:16}}/>
+    <label htmlFor="done" style={{fontSize:13,color:T.text,cursor:"pointer"}}>Clase ya dada</label>
+  </div>
+  <div style={{display:"flex",alignItems:"center",gap:8}}>
+    <input type="checkbox" id="required" checked={form.isRequired||false} onChange={e=>set("isRequired",e.target.checked)} style={{accentColor:T.orange,width:16,height:16}}/>
+    <label htmlFor="required" style={{fontSize:13,color:T.orange,cursor:"pointer",fontWeight:600}}>⚡ Clase Requerida (+$5/h al instructor)</label>
+  </div>
+</div>
         </div>
         <div style={{display:"flex",flexDirection:"column",gap:12}}>
           <SectionTitle>{isNew?"Seña / Primer Pago":"Actualizar Cobro"}</SectionTitle>

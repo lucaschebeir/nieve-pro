@@ -194,6 +194,7 @@ export function useClasses() {
       reservation_amount:  +formData.reservationAmount || 0,
       paid_amount:         paidAmount,
       class_done:          !!formData.classDone,
+      is_required:         !!formData.isRequired,
       // El trigger de Supabase calcula automáticamente:
       // scenario, seller_commission, instructor_earning,
       // school_cut, payment_status, instructor_status
@@ -231,6 +232,7 @@ export function useClasses() {
     paymentStatus:       c.payment_status,
     instructorStatus:    c.instructor_status,
     classDone:           c.class_done,
+    isRequired:          c.is_required,
     instructorHours:     c.instructor_hours,
     instructorHourlyRate:c.instructor_hourly_rate,
     instructorEarning:   c.instructor_earning,
