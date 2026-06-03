@@ -49,7 +49,7 @@ export default function LoginScreen() {
             WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
             fontWeight: 900, letterSpacing: "-0.04em",
           }}>
-            ⛷ NIEVE PRO
+            ⛷ APEX
           </div>
           <div style={{ fontSize: 13, color: T.textDim }}>
             Ingresá con tu cuenta de staff
