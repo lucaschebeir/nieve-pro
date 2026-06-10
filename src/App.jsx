@@ -280,6 +280,7 @@ function ModalClassEdit({data,staff,clients,config,onSave,onClose}){
   const empty={classDate:today,classTypeId:"",amount:"550",peopleCount:"1",sellerId:"",instructorId:"",clientId:"",clientName:"",notes:"",reservationAmount:"",paidAmount:"",classDone:false};
   const [form,setForm]=useState(data?{...data,amount:String(data.amount),peopleCount:String(data.peopleCount),reservationAmount:String(data.reservationAmount||0),paidAmount:String(data.paidAmount||0),sellerId:data.sellerId||"",instructorId:data.instructorId||"",clientId:data.clientId||""}:empty);
   const [preview,setPreview]=useState(null);
+  const [classDates, setClassDates] = useState([today]);
   const [saving,setSaving]=useState(false);
 
   const sellers=staff.filter(s=>(s.role==="seller"||s.role==="both")&&s.isActive);
@@ -305,7 +306,11 @@ function ModalClassEdit({data,staff,clients,config,onSave,onClose}){
   async function submit(){
     if(!form.amount||!form.clientName) return;
     setSaving(true);
-    try { await onSave({...form,id:data?.id}); }
+    try {
+      for (const date of (isNew ? classDates : [form.classDate])) {
+        await onSave({...form, id: isNew?undefined:data?.id, classDate: date});
+      }
+    }
     catch(e){ alert("Error guardando: "+e.message); }
     finally{ setSaving(false); }
   }
@@ -316,13 +321,22 @@ function ModalClassEdit({data,staff,clients,config,onSave,onClose}){
         <div style={{display:"flex",flexDirection:"column",gap:12}}>
           <SectionTitle>Datos de la Clase</SectionTitle>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-            <Inp label="Fecha" type="date" value={form.classDate} onChange={v=>set("classDate",v)} required/>
+            {classDates.map((d,i)=>(
+  <div key={i} style={{display:"flex",gap:8,alignItems:"center"}}>
+    <Inp label={classDates.length>1?`Día ${i+1}`:"Fecha"} type="date" value={d} onChange={v=>{const nd=[...classDates];nd[i]=v;setClassDates(nd);}} required style={{flex:1}}/>
+    {classDates.length>1&&<button onClick={()=>setClassDates(classDates.filter((_,j)=>j!==i))} style={{background:"none",border:"none",color:"#e53e3e",cursor:"pointer",fontSize:18,padding:"0 4px"}}>×</button>}
+  </div>
+))}
             <Inp label="Tipo" value={form.classTypeId} onChange={v=>set("classTypeId",v)} options={config.rates.map(r=>({value:r.id,label:`${r.name} — ${fmt(r.amount)}`}))}/>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
             <Inp label="Monto Total USD" type="number" value={form.amount} onChange={v=>set("amount",v)} required/>
             <Inp label="Personas" type="number" value={form.peopleCount} onChange={v=>set("peopleCount",v)}/>
           </div>
+          <Inp label="Cantidad de días" type="number" value={String(classDates.length)} onChange={v=>{
+  const n=Math.max(1,+v||1);
+  setClassDates(Array.from({length:n},(_,i)=>classDates[i]||today));
+}}/>
           <Inp label="Cliente existente (opc.)" value={form.clientId} onChange={v=>set("clientId",v)} options={clients.map(c=>({value:c.id,label:c.name}))}/>
           <Inp label="Nombre Cliente / Familia" value={form.clientName} onChange={v=>set("clientName",v)} placeholder="Familia Johnson" required/>
           <Inp label="Notas / Teléfono / Familiares" value={form.notes} onChange={v=>set("notes",v)} textarea placeholder="+54 9... | Juan y María"/>

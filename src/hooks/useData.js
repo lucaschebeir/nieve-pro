@@ -203,6 +203,7 @@ export function useClasses() {
       // school_cut, payment_status, instructor_status
     };
 
+    const count = +formData.daysCount || 1;
     if (formData.id) {
       const { error } = await supabase
         .from("classes")
@@ -210,12 +211,13 @@ export function useClasses() {
         .eq("id", formData.id);
       if (error) throw error;
     } else {
-      const { error } = await supabase
-        .from("classes")
-        .insert(payload);
-      if (error) throw error;
+      for (let i = 0; i < count; i++) {
+        const { error } = await supabase
+          .from("classes")
+          .insert(payload);
+        if (error) throw error;
+}
     }
-    refetch();
   }
 
   const mapped = data.map(c => ({
