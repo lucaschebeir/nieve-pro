@@ -696,7 +696,7 @@ function AdminApp() {
       return{Fecha:st.settledAt,Staff:s?.name||"","Periodo Inicio":st.periodStart,"Periodo Fin":st.periodEnd,Clases:st.totalClasses,"Total Pagado":st.totalEarned,Método:st.method,Notas:st.notes||""};
     })), "Liquidaciones");
 
-    const ingresosBrutos=classes.reduce((a,c)=>a+c.paidAmount,0);
+    const ingresosBrutos=classes.reduce((a,c)=>c.scenario==="own_class"?a+c.schoolCut:a+c.paidAmount,0);
     const totalFacturado=classes.reduce((a,c)=>a+c.amount,0);
     const totalComisiones=classes.reduce((a,c)=>a+c.sellerCommission,0);
     const totalInstructores=classes.reduce((a,c)=>a+c.instructorEarning,0);
@@ -863,8 +863,15 @@ function ClassesPage({classes,staff,clients,onEdit,onNew,onClientClick,onFinance
     if(search&&!c.clientName?.toLowerCase().includes(search.toLowerCase())&&!c.notes?.toLowerCase().includes(search.toLowerCase()))return false;
     return true;
   }),[classes,payF,instrF,settF,search]);
-  const totalM=filtered.reduce((a,c)=>a+c.amount,0);
-  const totalC=filtered.reduce((a,c)=>a+c.paidAmount,0);
+  const totalM=filtered.reduce((a,c)=>{
+  if(c.scenario==="own_class"&&c.schoolCut>0) return a+c.schoolCut;
+  return a+c.amount;
+},0);
+  const totalC=filtered.reduce((a,c)=>{
+  if(c.scenario==="own_class"&&c.schoolCut===0) return a+c.paidAmount;
+  if(c.scenario==="own_class"&&c.schoolCut>0) return a+c.schoolCut;
+  return a+c.paidAmount;
+},0);
   return(
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
       <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>
@@ -1075,7 +1082,7 @@ function StaffPage({staff,getBalance,settlements,clients,classes,extraCommission
 function FinanzasPage({classes,expenses,staff,onAddExpense}){
   const [newExp,setNewExp]=useState({amount:"",description:"",category:"general"});
   const [saving,setSaving]=useState(false);
-  const ingresosBrutos=classes.reduce((a,c)=>a+c.paidAmount,0);
+  const ingresosBrutos=classes.reduce((a,c)=>c.scenario==="own_class"?a+c.schoolCut:a+c.paidAmount,0);
   const totalComisiones=classes.reduce((a,c)=>a+c.sellerCommission,0);
   const totalInstructores=classes.reduce((a,c)=>a+c.instructorEarning,0);
   const totalGastos=expenses.reduce((a,e)=>a+e.amount,0);
