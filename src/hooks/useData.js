@@ -416,3 +416,53 @@ export function usePendingBalances() {
 
   return { balances, loading, refetch: fetch, getBalance };
 }
+// ─── EXTRA COMMISSIONS ────────────────────────────────────────
+export function useExtraCommissions() {
+  const { data, loading, error, refetch } = useTable("extra_commissions", "*");
+
+  async function addExtraCommission(staffId, amount, description, date) {
+    const { error } = await supabase
+      .from("extra_commissions")
+      .insert({
+        staff_id:    staffId,
+        amount:      +amount,
+        description: description,
+        date:        date || new Date().toISOString().split("T")[0],
+      });
+    if (error) throw error;
+    refetch();
+  }
+
+  async function settleExtraCommissions(staffId, periodStart, periodEnd, settlementId) {
+    const { error } = await supabase
+      .from("extra_commissions")
+      .update({ is_settled: true, settlement_id: settlementId })
+      .eq("staff_id", staffId)
+      .eq("is_settled", false)
+      .gte("date", periodStart)
+      .lte("date", periodEnd);
+    if (error) throw error;
+    refetch();
+  }
+
+  const mapped = (data || []).map(e => ({
+    id:          e.id,
+    staffId:     e.staff_id,
+    amount:      e.amount,
+    description: e.description,
+    date:        e.date,
+    isSettled:   e.is_settled,
+    settlementId:e.settlement_id,
+  }));
+
+async function deleteExtraCommission(id) {
+    const { error } = await supabase
+      .from("extra_commissions")
+      .delete()
+      .eq("id", id);
+    if (error) throw error;
+    refetch();
+  }
+
+  return { extraCommissions: mapped, loading, error, refetch, addExtraCommission, settleExtraCommissions, deleteExtraCommission };
+}

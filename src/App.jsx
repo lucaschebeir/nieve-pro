@@ -9,7 +9,7 @@ import { useAuth } from "./context/AuthContext";
 import LoginScreen from "./components/LoginScreen";
 import {
   useStaff, useClients, useClasses,
-  useSettlements, useExpenses, useConfig, usePendingBalances
+  useSettlements, useExpenses, useConfig, usePendingBalances, useExtraCommissions
 } from "./hooks/useData";
 import { supabase } from "./supabase";
 
@@ -452,6 +452,32 @@ function ModalClientEdit({data,staff,clients,onSave,onClose}){
 }
 
 // ─── MODAL: STAFF ─────────────────────────────────────────────────────────────
+function ModalExtraCommission({staff,onSave,onClose}){
+  const [amount,setAmount]=useState("");
+  const [desc,setDesc]=useState("");
+  const [date,setDate]=useState(today);
+  const [saving,setSaving]=useState(false);
+  async function submit(){
+    if(!amount||!desc) return;
+    setSaving(true);
+    try{ await onSave(amount,desc,date); }
+    catch(e){ alert("Error: "+e.message); }
+    finally{ setSaving(false); }
+  }
+  return(
+    <Modal title={`Comisión Extra — ${staff?.name}`} onClose={onClose}>
+      <div style={{display:"flex",flexDirection:"column",gap:13}}>
+        <Inp label="Monto USD" type="number" value={amount} onChange={setAmount} placeholder="Ej: 50, 100..." required/>
+        <Inp label="Descripción" value={desc} onChange={setDesc} placeholder="Ej: Venta equipo Rossignol" required/>
+        <Inp label="Fecha" type="date" value={date} onChange={setDate}/>
+      </div>
+      <div style={{display:"flex",gap:10,marginTop:18}}>
+        <Btn full disabled={saving} onClick={submit}>{saving?"Guardando...":"✓ Registrar Comisión"}</Btn>
+        <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
+      </div>
+    </Modal>
+  );
+}
 function ModalStaffEdit({data,config,onSave,onClose}){
   const [form,setForm]=useState(data?{...data}:{name:"",email:"",phone:"",role:"seller",commissionPct:10,hourlyRate:15,isActive:true});
   const [saving,setSaving]=useState(false);
@@ -554,6 +580,7 @@ function AdminApp() {
   const { classes, loading: clL, saveClass, deleteClass } = useClasses();
   const { settlements, loading: stL, settlePeriod } = useSettlements();
   const { expenses, loading: eL, addExpense } = useExpenses();
+  const { extraCommissions, addExtraCommission, settleExtraCommissions, deleteExtraCommission, refetch: refetchExtra } = useExtraCommissions();
   const { config, saveConfig } = useConfig();
   const { getBalance, refetch: refetchBalances } = usePendingBalances();
 
@@ -737,7 +764,7 @@ function AdminApp() {
         {page==="dashboard"&&<DashboardPage staff={staff} classes={classes} settlements={settlements} clients={clients} getBalance={getBalance} onSettle={s=>setModal({type:"settle",data:{staffId:s.id,name:s.name}})} onToggle={handleToggle} onViewStaff={s=>{setSelectedStaffId(s.id);setPage("staff");}}/>}
         {page==="classes"  &&<ClassesPage classes={classes} staff={staff} clients={clients} onEdit={c=>setModal({type:"class_edit",data:c})} onNew={()=>setModal({type:"class_edit",data:null})} onClientClick={goToClient} onFinanceClick={c=>setModal({type:"class_finance",data:c})}onDelete={async(id)=>{await deleteClass(id);showToast("✓ Clase eliminada")}}/>}
         {page==="clients"  &&<ClientsPage clients={clients} staff={staff} classes={classes} selectedClientId={selectedClientId} onClearSelected={()=>setSelectedClientId(null)} onEdit={c=>setModal({type:"client_edit",data:c})} onNew={()=>setModal({type:"client_edit",data:null})}/>}
-        {page==="staff"    &&<StaffPage staff={staff} getBalance={getBalance} settlements={settlements} clients={clients} classes={classes} selectedStaffId={selectedStaffId} onClearSelected={()=>setSelectedStaffId(null)} onToggle={handleToggle} onEdit={s=>setModal({type:"staff_edit",data:s})} onNew={()=>setModal({type:"staff_edit",data:null})} onSettle={s=>setModal({type:"settle",data:{staffId:s.id,name:s.name}})}/>}
+        {page==="staff"    &&<StaffPage staff={staff} getBalance={getBalance} settlements={settlements} clients={clients} classes={classes} selectedStaffId={selectedStaffId} onClearSelected={()=>setSelectedStaffId(null)} onToggle={handleToggle} onEdit={s=>setModal({type:"staff_edit",data:s})} onNew={()=>setModal({type:"staff_edit",data:null})} onSettle={s=>setModal({type:"settle",data:{staffId:s.id,name:s.name}})}extraCommissions={extraCommissions} onAddExtra={s=>setModal({type:"extra_commission",data:s})} onDeleteExtra={async(id)=>{await deleteExtraCommission(id);showToast("✓ Comisión eliminada");}}/>}
         {page==="finanzas" &&<FinanzasPage classes={classes} expenses={expenses} staff={staff} onAddExpense={addExpense}/>}
         {page==="search"   &&<SearchPage clients={clients} classes={classes} staff={staff} onViewClient={c=>{setSelectedClientId(c.id);setPage("clients");}}/>}
         {page==="config"   &&<ConfigPage config={config} onSave={async (c)=>{await saveConfig(c);showToast("✓ Configuración guardada");}} staff={staff} onSaveStaff={handleSaveStaff}/>}
@@ -748,6 +775,7 @@ function AdminApp() {
       {modal?.type==="settle"       &&<ModalSettle name={modal.data.name} staffId={modal.data.staffId} balance={getBalance(modal.data.staffId)} onConfirm={handleSettle} onClose={()=>setModal(null)}/>}
       {modal?.type==="client_edit"  &&<ModalClientEdit data={modal.data} staff={staff} clients={clients} onSave={handleSaveClient} onClose={()=>setModal(null)}/>}
       {modal?.type==="staff_edit"   &&<ModalStaffEdit data={modal.data} config={config} onSave={handleSaveStaff} onClose={()=>setModal(null)}/>}
+{modal?.type==="extra_commission"&&<ModalExtraCommission staff={modal.data} onSave={async(amount,desc,date)=>{await addExtraCommission(modal.data.id,amount,desc,date);showToast("✓ Comisión registrada");setModal(null);}} onClose={()=>setModal(null)}/>}
       {toast&&<div style={{position:"fixed",bottom:24,right:24,background:toast.type==="error"?T.red:T.green,color:T.white,padding:"12px 20px",borderRadius:10,fontWeight:700,fontSize:13,boxShadow:"0 8px 40px rgba(0,0,0,.5)",zIndex:999}}>{toast.msg}</div>}
     </div>
   );
@@ -926,7 +954,7 @@ function ClientsPage({clients,staff,classes,selectedClientId,onClearSelected,onE
   );
 }
 
-function StaffPage({staff,getBalance,settlements,clients,classes,selectedStaffId,onClearSelected,onToggle,onEdit,onNew,onSettle}){
+function StaffPage({staff,getBalance,settlements,clients,classes,extraCommissions,selectedStaffId,onClearSelected,onToggle,onEdit,onNew,onSettle,onAddExtra,onDeleteExtra}){
   const [viewId,setViewId]=useState(selectedStaffId||null);
   const [staffTab,setStaffTab]=useState("pending");
   const [selClient,setSelClient]=useState(null);
@@ -956,7 +984,8 @@ function StaffPage({staff,getBalance,settlements,clients,classes,selectedStaffId
             <div style={{display:"flex",gap:8,flexDirection:"column",alignItems:"flex-end"}}>
               <Toggle value={viewStaff.isActive} onChange={()=>onToggle(viewStaff.id)}/>
               <Btn variant="ghost" size="sm" onClick={()=>onEdit(viewStaff)}>✎ Editar</Btn>
-              <Btn variant="gold" size="sm" disabled={bal.pendingAmount===0} onClick={()=>onSettle(viewStaff)}>✓ Liquidar</Btn>
+<Btn variant="teal" size="sm" onClick={()=>onAddExtra(viewStaff)}>＋ Comisión</Btn>
+<Btn variant="gold" size="sm" disabled={bal.pendingAmount===0} onClick={()=>onSettle(viewStaff)}>✓ Liquidar</Btn>
             </div>
           </div>
           <div style={{display:"grid",gridTemplateColumns:`repeat(${isSeller?4:3},1fr)`,gap:10,marginBottom:16}}>
@@ -971,7 +1000,34 @@ function StaffPage({staff,getBalance,settlements,clients,classes,selectedStaffId
             {tabs.map(([v,l])=>(<button key={v} onClick={()=>{setStaffTab(v);setSelClient(null);}} style={{flex:1,background:staffTab===v?T.card:"none",border:"none",color:staffTab===v?T.text:T.textDim,padding:"7px 0",borderRadius:6,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{l}</button>))}
           </div>
           <div style={{maxHeight:380,overflowY:"auto",display:"flex",flexDirection:"column",gap:5}}>
-            {staffTab==="pending"&&(myClasses.filter(c=>!c.isSettled).length===0?<Empty text="Sin clases pendientes"/>:myClasses.filter(c=>!c.isSettled).map(c=>{const earn=c.instructorId===viewStaff.id&&c.scenario!=="own_class"?c.instructorEarning:c.sellerCommission;return(<div key={c.id} style={{background:T.surface,borderRadius:8,padding:"10px 14px",fontSize:12,borderLeft:`3px solid ${PAY_STATUS[c.paymentStatus]?.color||T.border}`}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}><span style={{color:T.textDim}}>{fmtDate(c.classDate)}</span><span style={{fontWeight:700,flex:1,paddingLeft:8}}>{c.clientName}</span><PayBadge status={c.paymentStatus}/><span style={{fontFamily:"monospace",color:T.cyan,fontWeight:700}}>→ {fmt(earn)}</span></div>{c.notes&&<div style={{color:T.muted,fontSize:11,marginTop:3}}>{c.notes}</div>}</div>);})) }
+            {staffTab==="pending"&&(
+  <div style={{display:"flex",flexDirection:"column",gap:5}}>
+    {myClasses.filter(c=>!c.isSettled).map(c=>{
+      const earn=c.scenario==="instructor_only"&&c.instructorId===viewStaff.id?c.instructorEarning:c.sellerCommission;
+      return(<div key={c.id} style={{background:T.surface,borderRadius:8,padding:"10px 14px",fontSize:12,borderLeft:`3px solid ${PAY_STATUS[c.paymentStatus]?.color||T.border}`}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+          <span style={{color:T.textDim}}>{fmtDate(c.classDate)}</span>
+          <span style={{fontWeight:700,flex:1,paddingLeft:8}}>{c.clientName}</span>
+          <PayBadge status={c.paymentStatus}/>
+          <span style={{fontFamily:"monospace",color:T.cyan,fontWeight:700}}>→ {fmt(earn)}</span>
+        </div>
+        {c.notes&&<div style={{color:T.muted,fontSize:11,marginTop:3}}>{c.notes}</div>}
+      </div>);
+    })}
+    {extraCommissions.filter(e=>e.staffId===viewStaff.id&&!e.isSettled).map(e=>(
+      <div key={e.id} style={{background:T.surface,borderRadius:8,padding:"10px 14px",fontSize:12,borderLeft:`3px solid ${T.teal}`}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+          <span style={{color:T.textDim}}>{fmtDate(e.date)}</span>
+          <span style={{fontWeight:700,flex:1,paddingLeft:8}}>{e.description}</span>
+          <Badge text="COMISIÓN EXTRA" color={T.teal} small/>
+          <span style={{fontFamily:"monospace",color:T.teal,fontWeight:700}}>→ {fmt(e.amount)}</span>
+          <button onClick={()=>{if(window.confirm("¿Eliminar esta comisión?"))onDeleteExtra(e.id)}} style={{background:"none",border:"none",color:T.red,cursor:"pointer",fontSize:16,padding:"0 4px"}}>✕</button>
+        </div>
+      </div>
+    ))}
+    {myClasses.filter(c=>!c.isSettled).length===0&&extraCommissions.filter(e=>e.staffId===viewStaff.id&&!e.isSettled).length===0&&<Empty text="Sin pendientes"/>}
+  </div>
+)}
             {staffTab==="history"&&(myClasses.filter(c=>c.isSettled).length===0?<Empty text="Sin historial"/>:myClasses.filter(c=>c.isSettled).map(c=>{const earn=c.instructorId===viewStaff.id&&c.scenario!=="own_class"?c.instructorEarning:c.sellerCommission;return(<div key={c.id} style={{background:T.surface,borderRadius:8,padding:"10px 14px",fontSize:12,display:"flex",gap:10,alignItems:"center",borderLeft:`3px solid ${T.muted}`}}><span style={{color:T.textDim}}>{fmtDate(c.classDate)}</span><span style={{flex:1,fontWeight:600}}>{c.clientName}</span><span style={{fontFamily:"monospace",color:T.green,fontWeight:700}}>{fmt(earn)}</span></div>);})) }
             {staffTab==="settlements"&&(mySettlements.length===0?<Empty text="Sin liquidaciones"/>:mySettlements.map(s=>(<div key={s.id} style={{background:T.surface,borderRadius:8,padding:"10px 14px",fontSize:12,display:"flex",gap:10,alignItems:"center"}}><span style={{color:T.textDim,whiteSpace:"nowrap"}}>{fmtDate(s.settledAt)}</span><span style={{flex:1}}>{fmtDate(s.periodStart)} → {fmtDate(s.periodEnd)}</span><span style={{fontFamily:"monospace",color:T.green,fontWeight:700}}>{fmt(s.totalEarned)}</span><Badge text={s.method} color={T.accent} small/></div>)))}
             {staffTab==="clients"&&!selClient&&(myClients.length===0?<Empty text="Sin clientes"/>:myClients.map(cl=>{const cls=classes.filter(c=>c.clientId===cl.id||c.clientName?.toLowerCase()===cl.name?.toLowerCase());return(<div key={cl.id} onClick={()=>setSelClient(cl)} style={{background:T.surface,borderRadius:8,padding:"10px 14px",cursor:"pointer",borderLeft:`3px solid ${T.cyan}`,display:"flex",gap:12,alignItems:"center"}} onMouseEnter={e=>e.currentTarget.style.background=T.cardHover} onMouseLeave={e=>e.currentTarget.style.background=T.surface}><Av name={cl.name} size={34} color={T.accent}/><div style={{flex:1}}><div style={{fontWeight:700}}>{cl.name}</div>{cl.phone&&<div style={{fontSize:11,color:T.textDim}}>📞 {cl.phone}</div>}</div><div style={{textAlign:"right"}}><div style={{fontFamily:"monospace",color:T.green,fontWeight:700}}>{fmt(cls.reduce((a,c)=>a+c.amount,0))}</div><div style={{fontSize:11,color:T.muted}}>{cls.length} clase(s)</div></div><span style={{color:T.textDim,fontSize:18}}>›</span></div>);})) }
