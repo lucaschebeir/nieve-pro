@@ -1291,12 +1291,12 @@ function StaffPortalPage({ staffMember, staff, classes, settlements, clients, ba
           </Card>
           {isSeller && (
             <Card>
-              <Stat label="Mis Clientes" value={myClients.length} color={T.accent} sub={`${staffMember?.commissionPct}% comisión`} />
+              <Stat label="Mis Clientes" value={myClients.length} color={T.accent} sub={`${staffMember?.commission_pct || staffMember?.commissionPct || 0}% comisión`} />
             </Card>
           )}
           {isInstructor && (
             <Card>
-              <Stat label="Tarifa/hora" value={fmt(staffMember?.hourlyRate)} color={T.purple} />
+              <Stat label="Tarifa/hora" value={fmt(staffMember?.hourly_rate || staffMember?.hourlyRate || 0)} color={T.purple} />
             </Card>
           )}
         </div>
