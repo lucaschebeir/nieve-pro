@@ -1003,7 +1003,7 @@ function StaffPage({staff,getBalance,settlements,clients,classes,extraCommission
             {staffTab==="pending"&&(
   <div style={{display:"flex",flexDirection:"column",gap:5}}>
     {myClasses.filter(c=>!c.isSettled).map(c=>{
-      const earn=c.scenario==="instructor_only"&&c.instructorId===viewStaff.id?c.instructorEarning:c.sellerCommission;
+      const earn=(c.instructorId===viewStaff.id&&(c.scenario==="instructor_only"||c.scenario==="seller_and_instructor"))?c.instructorEarning:c.sellerCommission;
       return(<div key={c.id} style={{background:T.surface,borderRadius:8,padding:"10px 14px",fontSize:12,borderLeft:`3px solid ${PAY_STATUS[c.paymentStatus]?.color||T.border}`}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
           <span style={{color:T.textDim}}>{fmtDate(c.classDate)}</span>
