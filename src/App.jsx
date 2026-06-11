@@ -277,7 +277,7 @@ function ClientDetailCard({client,allClasses,staff,onBack,backLabel,isAdmin=true
 // ─── MODAL: CLASE ──────────────────────────────────────────────────────────────
 function ModalClassEdit({data,staff,clients,config,onSave,onClose}){
   const isNew=!data;
-  const empty={classDate:today,classTypeId:"",amount:"550",peopleCount:"1",sellerId:"",instructorId:"",clientId:"",clientName:"",notes:"",reservationAmount:"",paidAmount:"",classDone:false};
+  const empty={classDate:today,classTypeId:"",amount:"550",peopleCount:"1",sellerId:"",instructorId:"",clientId:"",clientName:"",notes:"",reservationAmount:"",paidAmount:"",classDone:false,discipline:"ski"};
   const [form,setForm]=useState(data?{...data,amount:String(data.amount),peopleCount:String(data.peopleCount),reservationAmount:String(data.reservationAmount||0),paidAmount:String(data.paidAmount||0),sellerId:data.sellerId||"",instructorId:data.instructorId||"",clientId:data.clientId||""}:empty);
   const [preview,setPreview]=useState(null);
   const [classDates, setClassDates] = useState([today]);
@@ -344,6 +344,7 @@ function ModalClassEdit({data,staff,clients,config,onSave,onClose}){
             <Inp label="Vendedor" value={form.sellerId} onChange={v=>set("sellerId",v)} options={sellers.map(s=>({value:s.id,label:s.name}))}/>
             <Inp label="Instructor" value={form.instructorId} onChange={v=>set("instructorId",v)} options={instructors.map(s=>({value:s.id,label:s.name}))}/>
           </div>
+<Inp label="Disciplina" value={form.discipline||"ski"} onChange={v=>set("discipline",v)} options={[{value:"ski",label:"🎿 Esquí"},{value:"snowboard",label:"🏂 Snowboard"}]}/>
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
   <div style={{display:"flex",alignItems:"center",gap:8}}>
     <input type="checkbox" id="done" checked={form.classDone} onChange={e=>set("classDone",e.target.checked)} style={{accentColor:T.green,width:16,height:16}}/>
@@ -892,7 +893,10 @@ function ClassesPage({classes,staff,clients,onEdit,onNew,onClientClick,onFinance
               return(
                 <tr key={c.id} style={{borderLeft:`3px solid ${lb}40`}}>
                   <TD style={{fontSize:12,color:T.textDim,whiteSpace:"nowrap"}}>{fmtDate(c.classDate)}</TD>
-                  <TD><Badge text={c.classTypeName||"—"} color={T.muted} small/></TD>
+                  <TD>
+  <Badge text={c.classTypeName||"—"} color={T.muted} small/>
+  <Badge text={c.discipline==="snowboard"?"🏂 Snowboard":"🎿 Esquí"} color={c.discipline==="snowboard"?T.purple:T.cyan} small/>
+</TD>
                   <TD>
                     <button onClick={()=>onClientClick(c.clientId,c.clientName)} style={{background:"none",border:"none",color:T.accent,fontWeight:700,fontSize:13,cursor:"pointer",padding:0,fontFamily:"inherit",textDecoration:"underline"}}>{c.clientName}</button>
                     {c.notes&&<div style={{fontSize:11,color:T.textDim,maxWidth:140,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.notes}</div>}
