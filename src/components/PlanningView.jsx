@@ -1,7 +1,8 @@
 // src/components/PlanningView.jsx
 // Módulo de Planning — grilla semanal (admin) y agenda diaria (instructor)
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
+import { supabase } from "../supabase";
 import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
   useDroppable, useDraggable,
@@ -201,42 +202,43 @@ function HalfDayModal({ onChoose, onCancel }) {
 }
 
 // ─── DRAGGABLE CLASS CHIP (tarjeta arrastrable en pending/unassigned) ─────────
-function DraggableChip({ cls, color, onEdit }) {
+function DraggableChip({ cls, color, onEdit, onDelete }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: cls.id, data: { cls } });
   const dur = classDuration(cls);
   const durLabel = dur % 60 === 0 ? `${dur/60}hs` : `${Math.floor(dur/60)}h${dur%60}m`;
   return (
     <div ref={setNodeRef}
       style={{ background: `${color}18`, border: `1px solid ${color}40`, borderRadius: 7,
-        padding: "5px 9px", fontSize: 11, opacity: isDragging ? 0.35 : 1,
+        padding: "5px 9px 5px 9px", fontSize: 11, opacity: isDragging ? 0.35 : 1,
         display: "flex", flexDirection: "column", gap: 2, minWidth: 100,
-        touchAction: "none", position: "relative" }}>
-      {/* área de drag */}
+        touchAction: "none", position: "relative", paddingRight: 42 }}>
       <div {...listeners} {...attributes} style={{ cursor: "grab" }}>
         <span style={{ fontWeight: 700, color, whiteSpace: "nowrap", overflow: "hidden",
-          textOverflow: "ellipsis", maxWidth: 130, display: "block" }}>{cls.clientName}</span>
-        <span style={{ color: T.textDim }}>
-          {cls.classTypeName || "—"} · {durLabel}
-        </span>
+          textOverflow: "ellipsis", maxWidth: 120, display: "block" }}>{cls.clientName}</span>
+        <span style={{ color: T.textDim }}>{cls.classTypeName || "—"} · {durLabel}</span>
       </div>
-      {/* botón editar — detiene el pointer para no activar el drag */}
-      {onEdit && (
-        <button
-          onPointerDown={e => e.stopPropagation()}
-          onClick={() => onEdit(cls)}
-          style={{ position: "absolute", top: 3, right: 3, background: "none", border: "none",
-            color: T.textDim, cursor: "pointer", fontSize: 12, padding: "1px 3px",
-            lineHeight: 1, borderRadius: 4 }}
-          title="Editar clase">
-          ✎
-        </button>
-      )}
+      {/* Botones — stopPropagation en pointerDown para no activar drag */}
+      <div style={{ position: "absolute", top: 3, right: 3, display: "flex", gap: 2 }}>
+        {onEdit && (
+          <button onPointerDown={e => e.stopPropagation()} onClick={() => onEdit(cls)}
+            style={{ background: "none", border: "none", color: T.textDim, cursor: "pointer",
+              fontSize: 12, padding: "1px 3px", lineHeight: 1, borderRadius: 4 }}
+            title="Editar">✎</button>
+        )}
+        {onDelete && (
+          <button onPointerDown={e => e.stopPropagation()}
+            onClick={() => { if(window.confirm(`¿Eliminar clase de ${cls.clientName}?`)) onDelete(cls.id); }}
+            style={{ background: "none", border: "none", color: T.red, cursor: "pointer",
+              fontSize: 12, padding: "1px 3px", lineHeight: 1, borderRadius: 4 }}
+            title="Eliminar">✕</button>
+        )}
+      </div>
     </div>
   );
 }
 
 // ─── DRAGGABLE CLASS BLOCK (bloque en la línea de tiempo) ────────────────────
-function ClassBlock({ cls, pxPerMin, color, onEdit }) {
+function ClassBlock({ cls, pxPerMin, color, onEdit, onDelete }) {
   const startMin = timeToMin(cls.horarioInicio);
   const dur = classDuration(cls);
   const left = (startMin - DAY_START_MIN) * pxPerMin;
@@ -266,17 +268,23 @@ function ClassBlock({ cls, pxPerMin, color, onEdit }) {
         <div style={{ fontSize: 9, color, opacity: 0.7, whiteSpace: "nowrap",
           overflow: "hidden", textOverflow: "ellipsis" }}>{cls.classTypeName}</div>
       )}
-      {/* botón editar — detiene el pointer para no activar el drag */}
-      {onEdit && (
-        <button
-          onPointerDown={e => e.stopPropagation()}
-          onClick={() => onEdit(cls)}
-          style={{ position: "absolute", top: 3, right: 3, background: `${color}30`,
-            border: "none", color, cursor: "pointer", fontSize: 11, padding: "1px 4px",
-            lineHeight: 1, borderRadius: 3 }}
-          title="Editar clase">
-          ✎
-        </button>
+      {/* Botones editar / eliminar */}
+      {(onEdit || onDelete) && (
+        <div style={{ position: "absolute", top: 3, right: 3, display: "flex", gap: 2 }}>
+          {onEdit && (
+            <button onPointerDown={e => e.stopPropagation()} onClick={() => onEdit(cls)}
+              style={{ background: `${color}30`, border: "none", color, cursor: "pointer",
+                fontSize: 10, padding: "1px 4px", lineHeight: 1, borderRadius: 3 }}
+              title="Editar">✎</button>
+          )}
+          {onDelete && (
+            <button onPointerDown={e => e.stopPropagation()}
+              onClick={() => { if(window.confirm(`¿Eliminar clase de ${cls.clientName}?`)) onDelete(cls.id); }}
+              style={{ background: `${T.red}30`, border: "none", color: T.red, cursor: "pointer",
+                fontSize: 10, padding: "1px 4px", lineHeight: 1, borderRadius: 3 }}
+              title="Eliminar">✕</button>
+          )}
+        </div>
       )}
     </div>
   );
@@ -319,30 +327,208 @@ function TimeAxisHeader({ pxPerMin }) {
   );
 }
 
+// ─── MODAL INDISPONIBILIDAD ───────────────────────────────────────────────────
+function UnavailModal({ instrName, onConfirm, onCancel }) {
+  const [mode, setMode] = useState("full");
+  const [horaInicio, setHoraInicio] = useState("09:30");
+  const [horaFin, setHoraFin]       = useState("16:30");
+
+  const PRESETS = [
+    { id: "full",      label: "Todo el día",  sub: "9:30 – 16:30" },
+    { id: "morning",   label: "🌅 Mañana",    sub: "9:30 – 13:00" },
+    { id: "afternoon", label: "🌇 Tarde",      sub: "13:00 – 16:30" },
+    { id: "custom",    label: "Personalizado", sub: "elegí los horarios" },
+  ];
+
+  function resolve() {
+    if (mode === "full")      return { horaInicio: null, horaFin: null };
+    if (mode === "morning")   return { horaInicio: "09:30", horaFin: "13:00" };
+    if (mode === "afternoon") return { horaInicio: "13:00", horaFin: "16:30" };
+    return { horaInicio, horaFin };
+  }
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.8)", display: "flex",
+      alignItems: "center", justifyContent: "center", zIndex: 700, padding: 16 }}>
+      <div style={{ background: T.card, border: `1px solid ${T.borderLight}`, borderRadius: 16,
+        padding: 24, width: 340, maxWidth: "100%", boxShadow: "0 24px 80px rgba(0,0,0,.7)" }}>
+        <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 4 }}>
+          🚫 No disponible — {instrName}
+        </div>
+        <div style={{ fontSize: 12, color: T.textDim, marginBottom: 16 }}>
+          Elegí el rango horario de la indisponibilidad.
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+          {PRESETS.map(p => (
+            <button key={p.id} onClick={() => setMode(p.id)}
+              style={{ display: "flex", alignItems: "center", gap: 10,
+                background: mode === p.id ? `${T.red}18` : T.surface,
+                border: `1.5px solid ${mode === p.id ? T.red : T.border}`,
+                borderRadius: 9, padding: "10px 14px", cursor: "pointer",
+                fontFamily: "inherit", textAlign: "left" }}>
+              <div style={{ width: 16, height: 16, borderRadius: "50%",
+                border: `2px solid ${mode === p.id ? T.red : T.muted}`,
+                background: mode === p.id ? T.red : "transparent", flexShrink: 0 }} />
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700,
+                  color: mode === p.id ? T.red : T.text }}>{p.label}</div>
+                <div style={{ fontSize: 10, color: T.textDim }}>{p.sub}</div>
+              </div>
+            </button>
+          ))}
+        </div>
+
+        {mode === "custom" && (
+          <div style={{ display: "flex", gap: 10, marginBottom: 16, alignItems: "center" }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4 }}>Desde</div>
+              <input type="time" value={horaInicio} onChange={e => setHoraInicio(e.target.value)}
+                style={{ width: "100%", background: T.surface, border: `1px solid ${T.border}`,
+                  borderRadius: 7, padding: "7px 10px", color: T.text, fontSize: 13,
+                  fontFamily: "inherit", boxSizing: "border-box" }} />
+            </div>
+            <div style={{ fontSize: 12, color: T.muted, marginTop: 16 }}>→</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4 }}>Hasta</div>
+              <input type="time" value={horaFin} onChange={e => setHoraFin(e.target.value)}
+                style={{ width: "100%", background: T.surface, border: `1px solid ${T.border}`,
+                  borderRadius: 7, padding: "7px 10px", color: T.text, fontSize: 13,
+                  fontFamily: "inherit", boxSizing: "border-box" }} />
+            </div>
+          </div>
+        )}
+
+        <div style={{ display: "flex", gap: 8 }}>
+          <Btn variant="danger" style={{ flex: 1 }} onClick={() => onConfirm(resolve())}>
+            Marcar no disponible
+          </Btn>
+          <Btn variant="ghost" onClick={onCancel}>Cancelar</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── BLOQUE DE INDISPONIBILIDAD EN TIMELINE ───────────────────────────────────
+function UnavailBlock({ horaInicio, horaFin, pxPerMin }) {
+  const startMin = timeToMin(horaInicio);
+  const endMin   = timeToMin(horaFin);
+  const left  = (startMin - DAY_START_MIN) * pxPerMin;
+  const width = Math.max((endMin - startMin) * pxPerMin - 2, 30);
+  return (
+    <div style={{ position: "absolute", left, width, top: 4, bottom: 4, zIndex: 1,
+      background: `repeating-linear-gradient(-45deg,${T.red}14,${T.red}14 5px,transparent 5px,transparent 11px)`,
+      border: `1px solid ${T.red}50`, borderRadius: 7, pointerEvents: "none",
+      display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <span style={{ fontSize: 9, fontWeight: 700, color: T.red,
+        background: T.card, padding: "1px 6px", borderRadius: 3,
+        border: `1px solid ${T.red}40` }}>
+        {fmtTime(horaInicio)} – {fmtTime(horaFin)}
+      </span>
+    </div>
+  );
+}
+
 // ─── INSTRUCTOR ROW ───────────────────────────────────────────────────────────
-function InstructorRow({ instr, date, classes, pxPerMin, onEdit }) {
+function InstructorRow({ instr, date, classes, pxPerMin, onEdit, onDelete, unavailData, onSetUnavail, onClearUnavail }) {
   const onTimeline = classes.filter(c => c.horarioInicio);
+  const [showModal, setShowModal] = useState(false);
+  const [saving, setSaving]       = useState(false);
+
+  const isUnavail  = !!unavailData;
+  const isFullDay  = isUnavail && !unavailData.horaInicio;
+  const hasRange   = isUnavail && !!unavailData.horaInicio;
+
+  async function handleClear() {
+    setSaving(true);
+    try { await onClearUnavail(); } finally { setSaving(false); }
+  }
+
+  async function handleConfirm({ horaInicio, horaFin }) {
+    setShowModal(false);
+    setSaving(true);
+    try { await onSetUnavail(horaInicio, horaFin); } finally { setSaving(false); }
+  }
+
+  function btnLabel() {
+    if (saving) return "…";
+    if (!isUnavail) return "Disponible";
+    if (isFullDay) return "✗ Todo el día";
+    return `✗ ${fmtTime(unavailData.horaInicio)}–${fmtTime(unavailData.horaFin)}`;
+  }
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0",
-      borderBottom: `1px solid ${T.border}30` }}>
-      <div style={{ width: 132, flexShrink: 0, display: "flex", alignItems: "center", gap: 7 }}>
-        <Av name={instr.name} size={28} color={T.purple} />
-        <span style={{ fontSize: 12, fontWeight: 700, color: T.text, overflow: "hidden",
-          textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{instr.name.split(" ")[0]}</span>
+      borderBottom: `1px solid ${T.border}30`, opacity: isUnavail ? 0.75 : 1 }}>
+
+      {/* Label */}
+      <div style={{ width: 132, flexShrink: 0, display: "flex", flexDirection: "column",
+        alignItems: "flex-start", gap: 4 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+          <Av name={instr.name} size={28} color={isUnavail ? T.muted : T.purple} />
+          <span style={{ fontSize: 12, fontWeight: 700,
+            color: isUnavail ? T.muted : T.text,
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {instr.name.split(" ")[0]}
+          </span>
+        </div>
+        <button
+          disabled={saving}
+          onClick={isUnavail ? handleClear : () => setShowModal(true)}
+          style={{
+            background: isUnavail ? `${T.red}20` : `${T.muted}18`,
+            border: `1px solid ${isUnavail ? T.red : T.border}`,
+            color: isUnavail ? T.red : T.textDim,
+            borderRadius: 5, fontSize: 10, padding: "2px 6px",
+            cursor: saving ? "wait" : "pointer", fontFamily: "inherit",
+            fontWeight: 600, lineHeight: 1.4, maxWidth: 128,
+            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+          }}
+          title={isUnavail ? "Click para quitar" : "Click para marcar no disponible"}>
+          {btnLabel()}
+        </button>
       </div>
 
-      <TimelineDropArea instrId={instr.id} date={date} pxPerMin={pxPerMin}>
-        {onTimeline.map(c => (
-          <ClassBlock key={c.id} cls={c} pxPerMin={pxPerMin} color={classColor(c)} onEdit={onEdit} />
-        ))}
-      </TimelineDropArea>
+      {/* Timeline */}
+      <div style={{ flex: 1, position: "relative" }}>
+        {isFullDay && (
+          <div style={{ position: "absolute", inset: 0, zIndex: 2, borderRadius: 8, pointerEvents: "none",
+            background: `repeating-linear-gradient(-45deg,${T.red}08,${T.red}08 6px,transparent 6px,transparent 14px)`,
+            border: `1px solid ${T.red}30`,
+            display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: T.red,
+              background: T.card, padding: "2px 8px", borderRadius: 4,
+              border: `1px solid ${T.red}40` }}>No disponible todo el día</span>
+          </div>
+        )}
+        <TimelineDropArea instrId={instr.id} date={date} pxPerMin={pxPerMin}>
+          {hasRange && (
+            <UnavailBlock
+              horaInicio={unavailData.horaInicio}
+              horaFin={unavailData.horaFin}
+              pxPerMin={pxPerMin}
+            />
+          )}
+          {onTimeline.map(c => (
+            <ClassBlock key={c.id} cls={c} pxPerMin={pxPerMin} color={classColor(c)} onEdit={onEdit} onDelete={onDelete} />
+          ))}
+        </TimelineDropArea>
+      </div>
+
+      {showModal && (
+        <UnavailModal
+          instrName={instr.name.split(" ")[0]}
+          onConfirm={handleConfirm}
+          onCancel={() => setShowModal(false)}
+        />
+      )}
     </div>
   );
 }
 
 // ─── UNASSIGNED BUCKET ────────────────────────────────────────────────────────
-function UnassignedBucket({ classes, date, onEdit }) {
+function UnassignedBucket({ classes, date, onEdit, onDelete }) {
   const { setNodeRef, isOver } = useDroppable({
     id: `unassigned-${date}`,
     data: { type: "unassigned", date },
@@ -359,7 +545,7 @@ function UnassignedBucket({ classes, date, onEdit }) {
           border: `1px dashed ${isOver ? T.red : T.border}`, borderRadius: 10, minHeight: 48 }}>
         {classes.length === 0
           ? <span style={{ fontSize: 11, color: T.muted }}>— Todas las clases tienen instructor asignado —</span>
-          : classes.map(c => <DraggableChip key={c.id} cls={c} color={T.red} onEdit={onEdit} />)
+          : classes.map(c => <DraggableChip key={c.id} cls={c} color={T.red} onEdit={onEdit} onDelete={onDelete} />)
         }
       </div>
     </div>
@@ -381,7 +567,7 @@ function DragPreview({ cls }) {
 }
 
 // ─── PLANNING ADMIN VIEW ──────────────────────────────────────────────────────
-function PlanningAdminView({ classes, staff, onUpdate, onEdit }) {
+function PlanningAdminView({ classes, staff, onUpdate, onEdit, onDelete }) {
   const [anchorDate, setAnchorDate] = useState(todayStr);
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [halfDayPending, setHalfDayPending] = useState(null);
@@ -401,8 +587,44 @@ function PlanningAdminView({ classes, staff, onUpdate, onEdit }) {
   const pxPerMin = TIMELINE_W / DAY_SPAN_MIN;
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
-  // Guardamos la posición X del puntero durante el drag para calcular el slot al soltar
   const pointerXRef = useRef(null);
+
+  // ── Indisponibilidad de instructores ──────────────────────────────────────────
+  // Map<"staffId_date", { horaInicio: string|null, horaFin: string|null }>
+  const [unavailMap, setUnavailMap] = useState(new Map());
+
+  useEffect(() => {
+    if (!weekDays.length) return;
+    supabase
+      .from("instructor_unavailability")
+      .select("staff_id, date, hora_inicio, hora_fin")
+      .in("date", weekDays)
+      .then(({ data }) => {
+        if (data) setUnavailMap(new Map(
+          data.map(r => [`${r.staff_id}_${r.date}`, {
+            horaInicio: r.hora_inicio ? r.hora_inicio.slice(0, 5) : null,
+            horaFin:    r.hora_fin    ? r.hora_fin.slice(0, 5)    : null,
+          }])
+        ));
+      });
+  }, [weekDays.join(",")]);
+
+  async function setUnavailability(staffId, date, horaInicio, horaFin) {
+    const key = `${staffId}_${date}`;
+    const { error } = await supabase.from("instructor_unavailability")
+      .upsert({ staff_id: staffId, date, hora_inicio: horaInicio || null, hora_fin: horaFin || null },
+               { onConflict: "staff_id,date" });
+    if (error) { alert("Error guardando disponibilidad: " + error.message); return; }
+    setUnavailMap(m => new Map([...m, [key, { horaInicio: horaInicio || null, horaFin: horaFin || null }]]));
+  }
+
+  async function clearUnavailability(staffId, date) {
+    const key = `${staffId}_${date}`;
+    const { error } = await supabase.from("instructor_unavailability").delete()
+      .eq("staff_id", staffId).eq("date", date);
+    if (error) { alert("Error: " + error.message); return; }
+    setUnavailMap(m => { const n = new Map(m); n.delete(key); return n; });
+  }
 
   function handleDragStart({ active }) {
     const cls = classes.find(c => c.id === active.id);
@@ -447,6 +669,19 @@ function PlanningAdminView({ classes, staff, onUpdate, onEdit }) {
   // Separado para poder llamarlo tanto desde DnD como desde el modal de HalfDay
   function applyTimelineDrop(cls, instrId, startMin) {
     const dur = classDuration(cls);
+
+    // Advertencia si el instructor está marcado no disponible
+    const unavail = unavailMap.get(`${instrId}_${selectedDate}`);
+    if (unavail) {
+      const rangeLabel = unavail.horaInicio
+        ? `${unavail.horaInicio}–${unavail.horaFin}`
+        : "todo el día";
+      const instr = instructors.find(i => i.id === instrId);
+      const ok = window.confirm(
+        `⚠ ${instr?.name ?? "Este instructor"} está marcado como no disponible (${rangeLabel}) para este día.\n\n¿Asignar la clase igual?`
+      );
+      if (!ok) return;
+    }
 
     // Si el tipo tiene inicio fijo, lo usamos
     if (FIXED_START[cls.classTypeId]) {
@@ -542,6 +777,10 @@ function PlanningAdminView({ classes, staff, onUpdate, onEdit }) {
                 classes={byInstructor(instr.id)}
                 pxPerMin={pxPerMin}
                 onEdit={onEdit}
+                onDelete={onDelete}
+                unavailData={unavailMap.get(`${instr.id}_${selectedDate}`)}
+                onSetUnavail={(hi, hf) => setUnavailability(instr.id, selectedDate, hi, hf)}
+                onClearUnavail={() => clearUnavailability(instr.id, selectedDate)}
               />
             ))}
             {instructors.length === 0 && (
@@ -554,7 +793,7 @@ function PlanningAdminView({ classes, staff, onUpdate, onEdit }) {
       </div>
 
       {/* UNASSIGNED */}
-      <UnassignedBucket classes={unassigned} date={selectedDate} onEdit={onEdit} />
+      <UnassignedBucket classes={unassigned} date={selectedDate} onEdit={onEdit} onDelete={onDelete} />
 
       {/* HALF DAY MODAL */}
       {halfDayPending && (
@@ -584,34 +823,37 @@ const PAY_INFO = {
 };
 
 export function PlanningInstructorView({ classes, staffMember }) {
-  const [date, setDate] = useState(todayStr);
+  const [anchorDate, setAnchorDate] = useState(todayStr);
+  const [unavailByDate, setUnavailByDate] = useState(new Map());
 
-  // Solo clases donde el usuario logueado es el instructor
-  const allDay = classes
-    .filter(c => c.instructorId === staffMember?.id && c.classDate === date);
+  const weekDays = getWeekDays(anchorDate);
 
-  const withTime    = allDay.filter(c => c.horarioInicio)
-    .sort((a, b) => (timeToMin(a.horarioInicio) ?? 0) - (timeToMin(b.horarioInicio) ?? 0));
-  const withoutTime = allDay.filter(c => !c.horarioInicio);
-
-  function fmtDateLong(d) {
-    return new Date(d + "T12:00:00").toLocaleDateString("es-AR",
-      { weekday: "long", day: "numeric", month: "long" });
-  }
+  useEffect(() => {
+    if (!staffMember?.id) return;
+    supabase
+      .from("instructor_unavailability")
+      .select("date, hora_inicio, hora_fin")
+      .eq("staff_id", staffMember.id)
+      .then(({ data }) => {
+        if (data) setUnavailByDate(new Map(
+          data.map(r => [r.date, {
+            horaInicio: r.hora_inicio ? r.hora_inicio.slice(0, 5) : null,
+            horaFin:    r.hora_fin    ? r.hora_fin.slice(0, 5)    : null,
+          }])
+        ));
+      });
+  }, [staffMember?.id]);
 
   function AgendaCard({ c }) {
-    const color   = classColor(c);
+    const color    = classColor(c);
     const startMin = timeToMin(c.horarioInicio);
-    const endStr  = startMin != null ? fmtTime(minToTime(startMin + classDuration(c))) : null;
-    const isOwn   = c.scenario === "own_class";
-    const pay     = PAY_INFO[c.paymentStatus] ?? PAY_INFO.reserved;
-
+    const endStr   = startMin != null ? fmtTime(minToTime(startMin + classDuration(c))) : null;
+    const isOwn    = c.scenario === "own_class";
+    const pay      = PAY_INFO[c.paymentStatus] ?? PAY_INFO.reserved;
     return (
       <div style={{ background: T.card, border: `1px solid ${T.border}`,
         borderLeft: `4px solid ${color}`, borderRadius: 12, padding: "14px 16px",
         display: "flex", flexDirection: "column", gap: 8 }}>
-
-        {/* Horario + tipo */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <span style={{ fontFamily: "monospace", fontWeight: 900, color, fontSize: 16 }}>
             {c.horarioInicio
@@ -619,8 +861,6 @@ export function PlanningInstructorView({ classes, staffMember }) {
               : "⏳ Horario sin confirmar"}
           </span>
         </div>
-
-        {/* Badges */}
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {c.classTypeName && (
             <span style={{ background: `${color}18`, color, border: `1px solid ${color}40`,
@@ -651,18 +891,12 @@ export function PlanningInstructorView({ classes, staffMember }) {
             {c.discipline === "snowboard" ? "🏂 Snowboard" : "🎿 Esquí"}
           </span>
         </div>
-
-        {/* Cliente */}
         <div>
           <div style={{ fontWeight: 900, fontSize: 15 }}>{c.clientName}</div>
           {c.peopleCount > 1 && (
-            <div style={{ fontSize: 12, color: T.textDim, marginTop: 2 }}>
-              👥 {c.peopleCount} personas
-            </div>
+            <div style={{ fontSize: 12, color: T.textDim, marginTop: 2 }}>👥 {c.peopleCount} personas</div>
           )}
         </div>
-
-        {/* Notas */}
         {c.notes && (
           <div style={{ fontSize: 12, color: T.textDim, background: T.surface,
             borderRadius: 8, padding: "8px 11px", lineHeight: 1.6,
@@ -670,8 +904,6 @@ export function PlanningInstructorView({ classes, staffMember }) {
             📝 {c.notes}
           </div>
         )}
-
-        {/* Duración calculada */}
         {c.horarioInicio && (
           <div style={{ fontSize: 11, color: T.muted }}>
             Duración: {Math.round(classDuration(c) / 60 * 10) / 10}hs
@@ -681,63 +913,90 @@ export function PlanningInstructorView({ classes, staffMember }) {
     );
   }
 
+  function DaySection({ d }) {
+    const isToday = d === todayStr;
+    const isPast  = d < todayStr;
+    const unavail = unavailByDate.get(d);
+    const dayClasses = classes
+      .filter(c => c.instructorId === staffMember?.id && c.classDate === d)
+      .sort((a, b) => (timeToMin(a.horarioInicio) ?? 0) - (timeToMin(b.horarioInicio) ?? 0));
+    const label = new Date(d + "T12:00:00").toLocaleDateString("es-AR",
+      { weekday: "long", day: "numeric", month: "long" });
+
+    return (
+      <div style={{ borderBottom: `1px solid ${T.border}30`, paddingBottom: 16, marginBottom: 16,
+        opacity: isPast ? 0.55 : 1 }}>
+        {/* Encabezado del día */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+          <div style={{ width: 4, height: 28, borderRadius: 2,
+            background: isToday ? T.accent : dayClasses.length > 0 ? T.green : T.border }} />
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 13, textTransform: "capitalize",
+              color: isToday ? T.accent : T.text }}>
+              {label}
+              {isToday && (
+                <span style={{ marginLeft: 8, background: T.accent, color: T.white,
+                  fontSize: 9, fontWeight: 700, padding: "1px 7px", borderRadius: 20,
+                  verticalAlign: "middle" }}>HOY</span>
+              )}
+            </div>
+            <div style={{ fontSize: 11, color: T.textDim, marginTop: 1 }}>
+              {dayClasses.length === 0 && !unavail
+                ? "Sin clases"
+                : `${dayClasses.length} clase${dayClasses.length !== 1 ? "s" : ""}`}
+            </div>
+          </div>
+        </div>
+
+        {/* Banner no disponible */}
+        {unavail && (
+          <div style={{ background: `${T.red}14`, border: `1px solid ${T.red}40`,
+            borderRadius: 8, padding: "8px 12px", marginBottom: 10,
+            display: "flex", alignItems: "center", gap: 8 }}>
+            <span>🚫</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: T.red }}>No disponible</span>
+            <span style={{ fontSize: 11, color: T.textDim }}>
+              {unavail.horaInicio
+                ? `${fmtTime(unavail.horaInicio)} – ${fmtTime(unavail.horaFin)}`
+                : "todo el día"}
+            </span>
+          </div>
+        )}
+
+        {/* Clases */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {dayClasses.map(c => <AgendaCard key={c.id} c={c} />)}
+        </div>
+      </div>
+    );
+  }
+
+  const totalSemana = weekDays.reduce((acc, d) =>
+    acc + classes.filter(c => c.instructorId === staffMember?.id && c.classDate === d).length, 0);
+
   return (
     <div style={{ maxWidth: 520, margin: "0 auto" }}>
-      {/* Day nav */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
-        <Btn variant="ghost" size="sm" onClick={() => setDate(d => addDays(d, -1))}>←</Btn>
+      {/* Navegación semanal */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+        <Btn variant="ghost" size="sm" onClick={() => setAnchorDate(d => addWeeks(d, -1))}>←</Btn>
         <div style={{ flex: 1, textAlign: "center" }}>
-          <div style={{ fontWeight: 800, fontSize: 15, textTransform: "capitalize" }}>
-            {fmtDateLong(date)}
-          </div>
-          {date === todayStr
-            ? <div style={{ fontSize: 11, color: T.accent, marginTop: 2 }}>Hoy</div>
-            : <button onClick={() => setDate(todayStr)}
-                style={{ fontSize: 11, color: T.textDim, background: "none", border: "none",
-                  cursor: "pointer", fontFamily: "inherit", marginTop: 2 }}>
-                Volver a hoy
-              </button>
-          }
+          <div style={{ fontWeight: 700, fontSize: 13, color: T.text }}>{fmtWeekRange(weekDays)}</div>
         </div>
-        <Btn variant="ghost" size="sm" onClick={() => setDate(d => addDays(d, 1))}>→</Btn>
+        <Btn variant="ghost" size="sm" onClick={() => setAnchorDate(d => addWeeks(d, 1))}>→</Btn>
+        <Btn variant="ghost" size="sm" onClick={() => setAnchorDate(todayStr)}>Hoy</Btn>
+      </div>
+      <div style={{ fontSize: 11, color: T.textDim, textAlign: "center", marginBottom: 20 }}>
+        {totalSemana === 0 ? "Sin clases esta semana" : `${totalSemana} clase${totalSemana !== 1 ? "s" : ""} esta semana`}
       </div>
 
-      <div style={{ fontSize: 11, color: T.muted, textAlign: "center", marginBottom: 16 }}>
-        {allDay.length === 0 ? "Sin clases" : `${allDay.length} clase(s)`}
-      </div>
-
-      {/* Con horario */}
-      {withTime.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
-          {withTime.map(c => <AgendaCard key={c.id} c={c} />)}
-        </div>
-      )}
-
-      {/* Sin horario asignado */}
-      {withoutTime.length > 0 && (
-        <div>
-          <div style={{ fontSize: 10, fontWeight: 700, color: T.orange,
-            textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>
-            ⏳ Horario pendiente de confirmar
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {withoutTime.map(c => <AgendaCard key={c.id} c={c} />)}
-          </div>
-        </div>
-      )}
-
-      {/* Vacío */}
-      {allDay.length === 0 && (
-        <div style={{ textAlign: "center", padding: "40px 20px", color: T.muted, fontSize: 13 }}>
-          — Sin clases para este día —
-        </div>
-      )}
+      {/* 7 días */}
+      {weekDays.map(d => <DaySection key={d} d={d} />)}
     </div>
   );
 }
 
 // ─── EXPORT PRINCIPAL ─────────────────────────────────────────────────────────
-export default function PlanningView({ classes, staff, isAdmin, staffProfile, onUpdate, onEdit }) {
+export default function PlanningView({ classes, staff, isAdmin, staffProfile, onUpdate, onEdit, onDelete }) {
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
@@ -752,7 +1011,7 @@ export default function PlanningView({ classes, staff, isAdmin, staffProfile, on
       </div>
 
       {isAdmin ? (
-        <PlanningAdminView classes={classes} staff={staff} onUpdate={onUpdate} onEdit={onEdit} />
+        <PlanningAdminView classes={classes} staff={staff} onUpdate={onUpdate} onEdit={onEdit} onDelete={onDelete} />
       ) : (
         <PlanningInstructorView classes={classes} staffMember={staffProfile} />
       )}

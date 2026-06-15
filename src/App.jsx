@@ -4,7 +4,7 @@
 
 import ResetPasswordScreen from "./components/ResetPasswordScreen";
 import PlanningView, { PlanningInstructorView } from "./components/PlanningView";
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import * as XLSX from "xlsx";
 import { useAuth } from "./context/AuthContext";
 import LoginScreen from "./components/LoginScreen";
@@ -295,6 +295,17 @@ function ModalClassEdit({data,staff,clients,config,onSave,onClose}){
   const [preview,setPreview]=useState(null);
   const [classDates, setClassDates] = useState([today]);
   const [saving,setSaving]=useState(false);
+  const [unavailWarn,setUnavailWarn]=useState([]);
+
+  useEffect(()=>{
+    if(!form.instructorId){ setUnavailWarn([]); return; }
+    const datesToCheck = isNew ? classDates : [form.classDate];
+    supabase.from("instructor_unavailability")
+      .select("date,hora_inicio,hora_fin")
+      .eq("staff_id",form.instructorId)
+      .in("date",datesToCheck)
+      .then(({data})=>setUnavailWarn(data||[]));
+  },[form.instructorId, classDates.join(","), form.classDate]);
 
   const sellers=staff.filter(s=>(s.role==="seller"||s.role==="both")&&s.isActive);
   const instructors=staff.filter(s=>(s.role==="instructor"||s.role==="both")&&s.isActive);
@@ -388,6 +399,17 @@ function ModalClassEdit({data,staff,clients,config,onSave,onClose}){
             <Inp label="Vendedor" value={form.sellerId} onChange={v=>set("sellerId",v)} options={sellers.map(s=>({value:s.id,label:s.name}))}/>
             <Inp label="Instructor" value={form.instructorId} onChange={v=>set("instructorId",v)} options={instructors.map(s=>({value:s.id,label:s.name}))}/>
           </div>
+          {unavailWarn.length>0&&(
+            <div style={{background:`${T.orange}14`,border:`1px solid ${T.orange}50`,borderRadius:8,padding:"10px 13px",fontSize:12,color:T.orange,display:"flex",flexDirection:"column",gap:4}}>
+              <strong>⚠ Instructor no disponible</strong>
+              {unavailWarn.map(r=>(
+                <span key={r.date} style={{fontSize:11,color:T.textDim}}>
+                  {r.date}{r.hora_inicio?` · ${r.hora_inicio.slice(0,5)}–${r.hora_fin.slice(0,5)}`:" · Todo el día"}
+                </span>
+              ))}
+              <span style={{fontSize:11,color:T.textDim,marginTop:2}}>Podés guardar igual si querés.</span>
+            </div>
+          )}
 <Inp label="Disciplina" value={form.discipline||"ski"} onChange={v=>set("discipline",v)} options={[{value:"ski",label:"🎿 Esquí"},{value:"snowboard",label:"🏂 Snowboard"}]}/>
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
   <div style={{display:"flex",alignItems:"center",gap:8}}>
@@ -807,7 +829,7 @@ function AdminApp() {
       </div>
       {/* PAGES */}
       <div style={{padding:24,maxWidth:1360,margin:"0 auto"}}>
-        {page==="planning" &&<PlanningView classes={classes} staff={staff} isAdmin={true} onUpdate={updateClassSchedule} onEdit={c=>setModal({type:"class_edit",data:c})}/>}
+        {page==="planning" &&<PlanningView classes={classes} staff={staff} isAdmin={true} onUpdate={updateClassSchedule} onEdit={c=>setModal({type:"class_edit",data:c})} onDelete={async(id)=>{await deleteClass(id);showToast("✓ Clase eliminada")}}/>}
         {page==="dashboard"&&<DashboardPage staff={staff} classes={classes} settlements={settlements} clients={clients} getBalance={getBalance} onSettle={s=>setModal({type:"settle",data:{staffId:s.id,name:s.name}})} onToggle={handleToggle} onViewStaff={s=>{setSelectedStaffId(s.id);setPage("staff");}}/>}
         {page==="classes"  &&<ClassesPage classes={classes} staff={staff} clients={clients} onEdit={c=>setModal({type:"class_edit",data:c})} onNew={()=>setModal({type:"class_edit",data:null})} onClientClick={goToClient} onFinanceClick={c=>setModal({type:"class_finance",data:c})}onDelete={async(id)=>{await deleteClass(id);showToast("✓ Clase eliminada")}}/>}
         {page==="clients"  &&<ClientsPage clients={clients} staff={staff} classes={classes} selectedClientId={selectedClientId} onClearSelected={()=>setSelectedClientId(null)} onEdit={c=>setModal({type:"client_edit",data:c})} onNew={()=>setModal({type:"client_edit",data:null})}/>}
@@ -1523,8 +1545,9 @@ function StaffPortalPage({ staffMember, staff, classes, settlements, clients, ba
 
 // ─── ROOT ─────────────────────────────────────────────────────────────────────
 export default function App() {
-  const { session, staffProfile, isRecovery } = useAuth();
-if (isRecovery) return <ResetPasswordScreen/>;
+  const { session, staffProfile, isRecovery, loading } = useAuth();
+  if (isRecovery) return <ResetPasswordScreen/>;
+  if (loading) return <div style={{minHeight:"100vh",background:"#080e1a",display:"flex",alignItems:"center",justifyContent:"center",color:"#3d5478",fontSize:13}}>Cargando...</div>;
   if (!session) return <LoginScreen/>;
   if (!staffProfile) return <div style={{minHeight:"100vh",background:"#080e1a",display:"flex",alignItems:"center",justifyContent:"center",color:"white"}}>Cargando perfil...</div>;
   return <AdminApp/>;

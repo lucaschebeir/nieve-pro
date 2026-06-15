@@ -7,6 +7,8 @@ export function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
   const [staffProfile, setStaffProfile] = useState(null);
   const [isRecovery, setIsRecovery] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
@@ -17,7 +19,10 @@ export function AuthProvider({ children }) {
           .eq("user_id", data.session.user.id)
           .then(({ data: staff }) => {
             if (staff && staff[0]) setStaffProfile(staff[0]);
+            setAuthLoading(false);
           });
+      } else {
+        setAuthLoading(false);
       }
     });
 
@@ -58,7 +63,7 @@ export function AuthProvider({ children }) {
     <AuthContext.Provider value={{
       session,
       staffProfile,
-      loading: false,
+      loading: authLoading,
       isAdmin: staffProfile?.role === "admin",
       isRecovery,
       signIn,
