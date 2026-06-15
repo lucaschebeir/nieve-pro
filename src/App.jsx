@@ -3,7 +3,7 @@
 // Usa los hooks de useData.js para todas las operaciones reales
 
 import ResetPasswordScreen from "./components/ResetPasswordScreen";
-import PlanningView from "./components/PlanningView";
+import PlanningView, { PlanningInstructorView } from "./components/PlanningView";
 import { useState, useMemo, useCallback } from "react";
 import * as XLSX from "xlsx";
 import { useAuth } from "./context/AuthContext";
@@ -1254,6 +1254,7 @@ function StaffPortalPage({ staffMember, staff, classes, settlements, clients, ba
   const isInstructor = staffMember?.role === "instructor" || staffMember?.role === "both";
   const rc = ROLE_COLORS[staffMember?.role] || T.accent;
   const tabs = [
+    ...(isInstructor ? [["agenda", "Mi Agenda"]] : []),
     ["pending", "Mis Clases"],
     ["history", "Historial"],
     ["settlements", "Liquidaciones"],
@@ -1466,6 +1467,11 @@ function StaffPortalPage({ staffMember, staff, classes, settlements, clients, ba
               isAdmin={false}
             />
           </Card>
+        )}
+
+        {/* Tab: Mi Agenda — solo visible para instructores, filtra por su propio id */}
+        {tab === "agenda" && (
+          <PlanningInstructorView classes={classes} staffMember={staffMember} />
         )}
       </div>
     </div>

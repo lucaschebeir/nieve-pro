@@ -22,13 +22,17 @@ const DAY_START_MIN = 9 * 60 + 30;   // 9:30
 const DAY_END_MIN   = 16 * 60 + 30;  // 16:30
 const DAY_SPAN_MIN  = DAY_END_MIN - DAY_START_MIN; // 420 min
 
-// Duración en minutos por tipo de clase
+// Duración en minutos por tipo de clase (lookup por ID)
 const CLASS_DURATIONS = {
   "b31212c9-f92d-4536-abe9-52a233985a79": 420, // Full Day  9:30-16:30
   "e498e156-1668-4b5d-b0f8-fec47def2948": 270, // Mini Day  9:30-14:00
   "1ae8e449-40ac-444a-b524-220f81e150c6": 180, // Half Day  3hs
   "1e71732f-a418-44d4-8a4c-34b721aeec04": 120, // 2 Horas
-  "44deac8a-0fcc-45c7-bd46-feb14be29eb5": 180, // Grupal    3hs (asumido)
+  "44deac8a-0fcc-45c7-bd46-feb14be29eb5": 180, // Grupal    3hs
+};
+// Fallback por nombre (para clases con class_type_id vacío en BD)
+const DURATION_BY_NAME = {
+  "Full Day": 420, "Mini Day": 270, "Half Day": 180, "2 Horas": 120, "Clase Grupal": 180,
 };
 
 // Horarios fijos para tipos que no tienen flexibilidad
@@ -41,7 +45,9 @@ const FIXED_START = {
 const HALF_DAY_ID = "1ae8e449-40ac-444a-b524-220f81e150c6";
 
 function classDuration(cls) {
-  return CLASS_DURATIONS[cls.classTypeId] ?? 120;
+  return CLASS_DURATIONS[cls.classTypeId]
+    ?? DURATION_BY_NAME[cls.classTypeName]
+    ?? 120;
 }
 
 function timeToMin(timeStr) {
@@ -566,99 +572,159 @@ function PlanningAdminView({ classes, staff, onUpdate }) {
 }
 
 // ─── PLANNING INSTRUCTOR VIEW ─────────────────────────────────────────────────
-function PlanningInstructorView({ classes, staffMember }) {
+const PAY_INFO = {
+  reserved: { label: "Señado",      color: T.gold   },
+  partial:  { label: "Pago Parcial", color: T.orange },
+  paid:     { label: "Pago Total",   color: T.green  },
+};
+
+export function PlanningInstructorView({ classes, staffMember }) {
   const [date, setDate] = useState(todayStr);
 
-  const dayClasses = classes
-    .filter(c => c.instructorId === staffMember?.id && c.classDate === date)
-    .sort((a, b) => {
-      const aMin = timeToMin(a.horarioInicio) ?? 9999;
-      const bMin = timeToMin(b.horarioInicio) ?? 9999;
-      return aMin - bMin;
-    });
+  // Solo clases donde el usuario logueado es el instructor
+  const allDay = classes
+    .filter(c => c.instructorId === staffMember?.id && c.classDate === date);
+
+  const withTime    = allDay.filter(c => c.horarioInicio)
+    .sort((a, b) => (timeToMin(a.horarioInicio) ?? 0) - (timeToMin(b.horarioInicio) ?? 0));
+  const withoutTime = allDay.filter(c => !c.horarioInicio);
 
   function fmtDateLong(d) {
     return new Date(d + "T12:00:00").toLocaleDateString("es-AR",
       { weekday: "long", day: "numeric", month: "long" });
   }
 
+  function AgendaCard({ c }) {
+    const color   = classColor(c);
+    const startMin = timeToMin(c.horarioInicio);
+    const endStr  = startMin != null ? fmtTime(minToTime(startMin + classDuration(c))) : null;
+    const isOwn   = c.scenario === "own_class";
+    const pay     = PAY_INFO[c.paymentStatus] ?? PAY_INFO.reserved;
+
+    return (
+      <div style={{ background: T.card, border: `1px solid ${T.border}`,
+        borderLeft: `4px solid ${color}`, borderRadius: 12, padding: "14px 16px",
+        display: "flex", flexDirection: "column", gap: 8 }}>
+
+        {/* Horario + tipo */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <span style={{ fontFamily: "monospace", fontWeight: 900, color, fontSize: 16 }}>
+            {c.horarioInicio
+              ? `${fmtTime(c.horarioInicio)}${endStr ? ` – ${endStr}` : ""}`
+              : "⏳ Horario sin confirmar"}
+          </span>
+        </div>
+
+        {/* Badges */}
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {c.classTypeName && (
+            <span style={{ background: `${color}18`, color, border: `1px solid ${color}40`,
+              padding: "2px 8px", borderRadius: 20, fontSize: 10, fontWeight: 700 }}>
+              {c.classTypeName}
+            </span>
+          )}
+          <span style={{ background: `${pay.color}18`, color: pay.color,
+            border: `1px solid ${pay.color}40`, padding: "2px 8px",
+            borderRadius: 20, fontSize: 10, fontWeight: 700 }}>
+            {pay.label}
+          </span>
+          {isOwn && (
+            <span style={{ background: `${T.gold}18`, color: T.gold,
+              border: `1px solid ${T.gold}40`, padding: "2px 8px",
+              borderRadius: 20, fontSize: 10, fontWeight: 700 }}>
+              ⭐ Propia
+            </span>
+          )}
+          {c.isRequired && (
+            <span style={{ background: `${T.orange}18`, color: T.orange,
+              border: `1px solid ${T.orange}40`, padding: "2px 8px",
+              borderRadius: 20, fontSize: 10, fontWeight: 700 }}>
+              ⚡ Requerida
+            </span>
+          )}
+          <span style={{ fontSize: 10, color: T.textDim, padding: "2px 4px" }}>
+            {c.discipline === "snowboard" ? "🏂 Snowboard" : "🎿 Esquí"}
+          </span>
+        </div>
+
+        {/* Cliente */}
+        <div>
+          <div style={{ fontWeight: 900, fontSize: 15 }}>{c.clientName}</div>
+          {c.peopleCount > 1 && (
+            <div style={{ fontSize: 12, color: T.textDim, marginTop: 2 }}>
+              👥 {c.peopleCount} personas
+            </div>
+          )}
+        </div>
+
+        {/* Notas */}
+        {c.notes && (
+          <div style={{ fontSize: 12, color: T.textDim, background: T.surface,
+            borderRadius: 8, padding: "8px 11px", lineHeight: 1.6,
+            borderLeft: `2px solid ${T.borderLight}` }}>
+            📝 {c.notes}
+          </div>
+        )}
+
+        {/* Duración calculada */}
+        {c.horarioInicio && (
+          <div style={{ fontSize: 11, color: T.muted }}>
+            Duración: {Math.round(classDuration(c) / 60 * 10) / 10}hs
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <div style={{ maxWidth: 500, margin: "0 auto" }}>
+    <div style={{ maxWidth: 520, margin: "0 auto" }}>
       {/* Day nav */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
         <Btn variant="ghost" size="sm" onClick={() => setDate(d => addDays(d, -1))}>←</Btn>
         <div style={{ flex: 1, textAlign: "center" }}>
-          <div style={{ fontWeight: 800, fontSize: 15 }}>{fmtDateLong(date)}</div>
-          {date === todayStr && <div style={{ fontSize: 11, color: T.accent }}>Hoy</div>}
+          <div style={{ fontWeight: 800, fontSize: 15, textTransform: "capitalize" }}>
+            {fmtDateLong(date)}
+          </div>
+          {date === todayStr
+            ? <div style={{ fontSize: 11, color: T.accent, marginTop: 2 }}>Hoy</div>
+            : <button onClick={() => setDate(todayStr)}
+                style={{ fontSize: 11, color: T.textDim, background: "none", border: "none",
+                  cursor: "pointer", fontFamily: "inherit", marginTop: 2 }}>
+                Volver a hoy
+              </button>
+          }
         </div>
         <Btn variant="ghost" size="sm" onClick={() => setDate(d => addDays(d, 1))}>→</Btn>
       </div>
-      {date !== todayStr && (
-        <Btn variant="ghost" size="sm" onClick={() => setDate(todayStr)}
-          style={{ marginBottom: 12, display: "block", marginInline: "auto" }}>
-          Volver a hoy
-        </Btn>
+
+      <div style={{ fontSize: 11, color: T.muted, textAlign: "center", marginBottom: 16 }}>
+        {allDay.length === 0 ? "Sin clases" : `${allDay.length} clase(s)`}
+      </div>
+
+      {/* Con horario */}
+      {withTime.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
+          {withTime.map(c => <AgendaCard key={c.id} c={c} />)}
+        </div>
       )}
 
-      {/* Agenda */}
-      {dayClasses.length === 0 ? (
+      {/* Sin horario asignado */}
+      {withoutTime.length > 0 && (
+        <div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: T.orange,
+            textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>
+            ⏳ Horario pendiente de confirmar
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {withoutTime.map(c => <AgendaCard key={c.id} c={c} />)}
+          </div>
+        </div>
+      )}
+
+      {/* Vacío */}
+      {allDay.length === 0 && (
         <div style={{ textAlign: "center", padding: "40px 20px", color: T.muted, fontSize: 13 }}>
           — Sin clases para este día —
-        </div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {dayClasses.map(c => {
-            const color = classColor(c);
-            const startMin = timeToMin(c.horarioInicio);
-            const endStr = startMin != null
-              ? fmtTime(minToTime(startMin + classDuration(c)))
-              : null;
-            const isOwn = c.scenario === "own_class";
-
-            return (
-              <div key={c.id} style={{ background: T.card, border: `1px solid ${T.border}`,
-                borderLeft: `4px solid ${color}`, borderRadius: 12, padding: "14px 16px" }}>
-                {/* Horario */}
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                  {c.horarioInicio ? (
-                    <span style={{ fontFamily: "monospace", fontWeight: 800, color, fontSize: 15 }}>
-                      {fmtTime(c.horarioInicio)}{endStr ? ` – ${endStr}` : ""}
-                    </span>
-                  ) : (
-                    <span style={{ fontSize: 12, color: T.orange, fontWeight: 600 }}>
-                      ⏳ Horario sin confirmar
-                    </span>
-                  )}
-                  <span style={{ background: `${color}18`, color, border: `1px solid ${color}40`,
-                    padding: "2px 8px", borderRadius: 20, fontSize: 10, fontWeight: 700 }}>
-                    {c.classTypeName || "—"}
-                  </span>
-                  {isOwn && (
-                    <span style={{ background: `${T.gold}18`, color: T.gold,
-                      border: `1px solid ${T.gold}40`, padding: "2px 8px",
-                      borderRadius: 20, fontSize: 10, fontWeight: 700 }}>
-                      ⭐ Propia
-                    </span>
-                  )}
-                </div>
-
-                {/* Cliente */}
-                <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 4 }}>{c.clientName}</div>
-                {c.peopleCount > 1 && (
-                  <div style={{ fontSize: 12, color: T.textDim }}>👥 {c.peopleCount} personas</div>
-                )}
-                {c.notes && (
-                  <div style={{ fontSize: 12, color: T.textDim, marginTop: 6,
-                    background: T.surface, borderRadius: 6, padding: "5px 9px", lineHeight: 1.5 }}>
-                    {c.notes}
-                  </div>
-                )}
-                <div style={{ fontSize: 11, color: T.textDim, marginTop: 6 }}>
-                  {c.discipline === "snowboard" ? "🏂 Snowboard" : "🎿 Esquí"}
-                </div>
-              </div>
-            );
-          })}
         </div>
       )}
     </div>
