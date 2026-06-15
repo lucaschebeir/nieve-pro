@@ -3,6 +3,7 @@
 // Usa los hooks de useData.js para todas las operaciones reales
 
 import ResetPasswordScreen from "./components/ResetPasswordScreen";
+import PlanningView from "./components/PlanningView";
 import { useState, useMemo, useCallback } from "react";
 import * as XLSX from "xlsx";
 import { useAuth } from "./context/AuthContext";
@@ -578,7 +579,7 @@ function AdminApp() {
   const { staffProfile, signOut, isAdmin, session } = useAuth();
   const { staff, loading: sL, toggleActive, saveStaff } = useStaff();
   const { clients, loading: cL, saveClient } = useClients();
-  const { classes, loading: clL, saveClass, deleteClass } = useClasses();
+  const { classes, loading: clL, saveClass, deleteClass, updateClassSchedule } = useClasses();
   const { settlements, loading: stL, settlePeriod } = useSettlements();
   const { expenses, loading: eL, addExpense } = useExpenses();
   const { extraCommissions, addExtraCommission, settleExtraCommissions, deleteExtraCommission, refetch: refetchExtra } = useExtraCommissions();
@@ -725,6 +726,7 @@ function AdminApp() {
 
   const NAV = [
     {id:"dashboard",label:"Dashboard",icon:"◈"},
+    {id:"planning", label:"Planning", icon:"▦"},
     {id:"classes",  label:"Clases",   icon:"▤"},
     {id:"clients",  label:"Clientes", icon:"♟"},
     {id:"staff",    label:"Staff",    icon:"⚇"},
@@ -762,6 +764,7 @@ function AdminApp() {
       </div>
       {/* PAGES */}
       <div style={{padding:24,maxWidth:1360,margin:"0 auto"}}>
+        {page==="planning" &&<PlanningView classes={classes} staff={staff} isAdmin={true} onUpdate={updateClassSchedule}/>}
         {page==="dashboard"&&<DashboardPage staff={staff} classes={classes} settlements={settlements} clients={clients} getBalance={getBalance} onSettle={s=>setModal({type:"settle",data:{staffId:s.id,name:s.name}})} onToggle={handleToggle} onViewStaff={s=>{setSelectedStaffId(s.id);setPage("staff");}}/>}
         {page==="classes"  &&<ClassesPage classes={classes} staff={staff} clients={clients} onEdit={c=>setModal({type:"class_edit",data:c})} onNew={()=>setModal({type:"class_edit",data:null})} onClientClick={goToClient} onFinanceClick={c=>setModal({type:"class_finance",data:c})}onDelete={async(id)=>{await deleteClass(id);showToast("✓ Clase eliminada")}}/>}
         {page==="clients"  &&<ClientsPage clients={clients} staff={staff} classes={classes} selectedClientId={selectedClientId} onClearSelected={()=>setSelectedClientId(null)} onEdit={c=>setModal({type:"client_edit",data:c})} onNew={()=>setModal({type:"client_edit",data:null})}/>}

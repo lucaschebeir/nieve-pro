@@ -248,8 +248,18 @@ export function useClasses() {
     schoolCut:           c.school_cut,
     isSettled:           c.is_settled,
     settlementId:        c.settlement_id,
+    horarioInicio:       c.horario_inicio ?? null,
     createdAt:           c.created_at?.split("T")[0],
   }));
+
+  async function updateClassSchedule(classId, { instructorId, horarioInicio }) {
+    const patch = {};
+    if (instructorId !== undefined) patch.instructor_id = instructorId || null;
+    if (horarioInicio !== undefined) patch.horario_inicio = horarioInicio || null;
+    const { error } = await supabase.from("classes").update(patch).eq("id", classId);
+    if (error) throw error;
+    refetch();
+  }
 
   async function deleteClass(classId) {
     const { error } = await supabase
@@ -260,7 +270,7 @@ export function useClasses() {
     refetch();
   }
 
-  return { classes: mapped, loading, error, refetch, saveClass, deleteClass };
+  return { classes: mapped, loading, error, refetch, saveClass, deleteClass, updateClassSchedule };
 }
 
 // ─── SETTLEMENTS ──────────────────────────────────────────────
