@@ -220,24 +220,29 @@ function ClassBlock({ cls, pxPerMin, color }) {
   const startMin = timeToMin(cls.horarioInicio);
   const dur = classDuration(cls);
   const left = (startMin - DAY_START_MIN) * pxPerMin;
-  const width = Math.max(dur * pxPerMin - 2, 20);
+  const width = Math.max(dur * pxPerMin - 3, 24);
+  const endStr = fmtTime(minToTime(startMin + dur));
 
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: cls.id, data: { cls } });
 
   return (
     <div ref={setNodeRef} {...listeners} {...attributes}
-      title={`${cls.clientName} · ${fmtTime(cls.horarioInicio)} – ${fmtTime(minToTime(startMin + dur))}`}
-      style={{ position: "absolute", left, width, top: 4, bottom: 4,
-        background: `${color}25`, border: `1.5px solid ${color}70`, borderRadius: 6,
-        cursor: "grab", opacity: isDragging ? 0.35 : 1, overflow: "hidden",
-        padding: "3px 6px", boxSizing: "border-box", touchAction: "none",
-        display: "flex", flexDirection: "column", justifyContent: "center" }}>
-      <div style={{ fontSize: 10, fontWeight: 800, color, whiteSpace: "nowrap",
+      title={`${cls.clientName} · ${fmtTime(cls.horarioInicio)} – ${endStr}`}
+      style={{ position: "absolute", left, width, top: 5, bottom: 5,
+        background: `${color}22`, border: `2px solid ${color}80`, borderRadius: 8,
+        cursor: "grab", opacity: isDragging ? 0.3 : 1, overflow: "hidden",
+        padding: "5px 7px", boxSizing: "border-box", touchAction: "none",
+        display: "flex", flexDirection: "column", justifyContent: "center", gap: 2 }}>
+      <div style={{ fontSize: 11, fontWeight: 800, color, whiteSpace: "nowrap",
         overflow: "hidden", textOverflow: "ellipsis" }}>{cls.clientName}</div>
-      {width > 60 && (
-        <div style={{ fontSize: 9, color: T.textDim }}>
-          {fmtTime(cls.horarioInicio)}
+      {width > 70 && (
+        <div style={{ fontSize: 10, color: T.textDim, whiteSpace: "nowrap" }}>
+          {fmtTime(cls.horarioInicio)} – {endStr}
         </div>
+      )}
+      {width > 110 && cls.classTypeName && (
+        <div style={{ fontSize: 9, color, opacity: 0.7, whiteSpace: "nowrap",
+          overflow: "hidden", textOverflow: "ellipsis" }}>{cls.classTypeName}</div>
       )}
     </div>
   );
@@ -249,33 +254,15 @@ function TimelineDropArea({ instrId, date, children }) {
   const { setNodeRef, isOver } = useDroppable({ id: dropId, data: { instrId, date, type: "timeline" } });
   return (
     <div ref={setNodeRef} id={dropId}
-      style={{ position: "relative", height: 52, flex: 1,
-        background: isOver ? `${T.accent}10` : "transparent",
-        border: isOver ? `1px dashed ${T.accent}60` : "1px solid transparent",
-        borderRadius: 6, transition: "background .15s", overflow: "visible" }}>
+      style={{ position: "relative", height: 80, flex: 1,
+        background: isOver ? `${T.accent}10` : `${T.surface}30`,
+        border: isOver ? `1px dashed ${T.accent}70` : `1px solid ${T.border}50`,
+        borderRadius: 8, transition: "background .15s", overflow: "visible" }}>
       {children}
     </div>
   );
 }
 
-// ─── DROPPABLE PENDING ZONE ───────────────────────────────────────────────────
-function PendingZone({ instrId, date, children }) {
-  const { setNodeRef, isOver } = useDroppable({
-    id: `pending-${instrId}-${date}`,
-    data: { instrId, date, type: "pending" },
-  });
-  const hasChildren = Array.isArray(children) ? children.filter(Boolean).length > 0 : !!children;
-  return (
-    <div ref={setNodeRef}
-      style={{ display: "flex", gap: 6, flexWrap: "wrap", padding: "4px 6px",
-        minHeight: 36, background: isOver ? `${T.gold}10` : `${T.surface}`,
-        border: isOver ? `1px dashed ${T.gold}60` : `1px solid ${T.border}30`,
-        borderRadius: 6, alignItems: "center",
-        ...(hasChildren ? {} : { opacity: 0.4 }) }}>
-      {hasChildren ? children : <span style={{ fontSize: 10, color: T.muted }}>sin horario asignado</span>}
-    </div>
-  );
-}
 
 // ─── TIME AXIS HEADER ─────────────────────────────────────────────────────────
 function TimeAxisHeader({ pxPerMin }) {
@@ -301,33 +288,23 @@ function TimeAxisHeader({ pxPerMin }) {
 // ─── INSTRUCTOR ROW ───────────────────────────────────────────────────────────
 function InstructorRow({ instr, date, classes, pxPerMin }) {
   const onTimeline = classes.filter(c => c.horarioInicio);
-  const pending    = classes.filter(c => !c.horarioInicio);
 
   return (
-    <div style={{ display: "flex", alignItems: "stretch", gap: 8, minHeight: 62, padding: "4px 0",
+    <div style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 96, padding: "6px 0",
       borderBottom: `1px solid ${T.border}30` }}>
       {/* Label */}
       <div style={{ width: 132, flexShrink: 0, display: "flex", alignItems: "center", gap: 7 }}>
-        <Av name={instr.name} size={26} color={T.purple} />
-        <span style={{ fontSize: 11, fontWeight: 700, color: T.text, overflow: "hidden",
+        <Av name={instr.name} size={28} color={T.purple} />
+        <span style={{ fontSize: 12, fontWeight: 700, color: T.text, overflow: "hidden",
           textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{instr.name.split(" ")[0]}</span>
       </div>
 
       {/* Timeline */}
-      <div style={{ display: "flex", flexDirection: "column", flex: 1, gap: 4 }}>
-        <TimelineDropArea instrId={instr.id} date={date} pxPerMin={pxPerMin}>
-          {onTimeline.map(c => (
-            <ClassBlock key={c.id} cls={c} pxPerMin={pxPerMin} color={classColor(c)} />
-          ))}
-        </TimelineDropArea>
-
-        {/* Pending (sin horario) */}
-        <PendingZone instrId={instr.id} date={date}>
-          {pending.map(c => (
-            <DraggableChip key={c.id} cls={c} color={classColor(c)} />
-          ))}
-        </PendingZone>
-      </div>
+      <TimelineDropArea instrId={instr.id} date={date} pxPerMin={pxPerMin}>
+        {onTimeline.map(c => (
+          <ClassBlock key={c.id} cls={c} pxPerMin={pxPerMin} color={classColor(c)} />
+        ))}
+      </TimelineDropArea>
     </div>
   );
 }
@@ -388,7 +365,7 @@ function PlanningAdminView({ classes, staff, onUpdate }) {
   const byInstructor = id => dayClasses.filter(c => c.instructorId === id);
 
   // px por minuto — ancho fijo del timeline
-  const TIMELINE_W = 660;
+  const TIMELINE_W = 980;
   const pxPerMin = TIMELINE_W / DAY_SPAN_MIN;
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
@@ -417,11 +394,6 @@ function PlanningAdminView({ classes, staff, onUpdate }) {
 
     if (type === "unassigned") {
       onUpdate(cls.id, { instructorId: null, horarioInicio: null });
-      return;
-    }
-
-    if (type === "pending") {
-      onUpdate(cls.id, { instructorId: instrId, horarioInicio: null });
       return;
     }
 
@@ -527,7 +499,7 @@ function PlanningAdminView({ classes, staff, onUpdate }) {
       {/* GRILLA */}
       <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14,
         padding: "16px 20px", overflowX: "auto" }}>
-        <div style={{ minWidth: TIMELINE_W + 160 }}>
+        <div style={{ minWidth: TIMELINE_W + 148 }}>
           <TimeAxisHeader pxPerMin={pxPerMin} />
           <div style={{ marginTop: 6 }}>
             {instructors.map(instr => (
