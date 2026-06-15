@@ -287,35 +287,23 @@ function TimeAxisHeader({ pxPerMin }) {
 
 // ─── INSTRUCTOR ROW ───────────────────────────────────────────────────────────
 function InstructorRow({ instr, date, classes, pxPerMin }) {
-  const onTimeline = classes.filter(c =>  c.horarioInicio);
-  const pending    = classes.filter(c => !c.horarioInicio);
+  const onTimeline = classes.filter(c => c.horarioInicio);
 
   return (
-    <div style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "6px 0",
+    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0",
       borderBottom: `1px solid ${T.border}30` }}>
       {/* Label */}
-      <div style={{ width: 132, flexShrink: 0, display: "flex", alignItems: "center",
-        gap: 7, paddingTop: 10 }}>
+      <div style={{ width: 132, flexShrink: 0, display: "flex", alignItems: "center", gap: 7 }}>
         <Av name={instr.name} size={28} color={T.purple} />
         <span style={{ fontSize: 12, fontWeight: 700, color: T.text, overflow: "hidden",
           textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{instr.name.split(" ")[0]}</span>
       </div>
 
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 5 }}>
-        {/* Timeline */}
-        <TimelineDropArea instrId={instr.id} date={date} pxPerMin={pxPerMin}>
-          {onTimeline.map(c => (
-            <ClassBlock key={c.id} cls={c} pxPerMin={pxPerMin} color={classColor(c)} />
-          ))}
-        </TimelineDropArea>
-
-        {/* Chips sin horario — arrastrables al timeline */}
-        {pending.length > 0 && (
-          <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-            {pending.map(c => <DraggableChip key={c.id} cls={c} color={classColor(c)} />)}
-          </div>
-        )}
-      </div>
+      <TimelineDropArea instrId={instr.id} date={date} pxPerMin={pxPerMin}>
+        {onTimeline.map(c => (
+          <ClassBlock key={c.id} cls={c} pxPerMin={pxPerMin} color={classColor(c)} />
+        ))}
+      </TimelineDropArea>
     </div>
   );
 }

@@ -299,8 +299,8 @@ function ModalClassEdit({data,staff,clients,config,onSave,onClose}){
     if(k==="classTypeId"){
       const r=config.rates.find(x=>x.id===v);
       if(r) next.amount=String(r.amount);
-      if(v===_fullDayId||v===_miniDayId) next.horarioInicio="09:30";
-      else if(v!==_halfDayId) next.horarioInicio=""; // Half Day: no tocar, el user elige
+      if(v===_halfDayId) next.horarioInicio=""; // Half Day: el usuario elige mañana/tarde
+      else if(v)         next.horarioInicio="09:30"; // todos los demás: default 09:30
     }
     if(k==="clientId"&&v){const cl=clients.find(c=>c.id===v);if(cl){next.clientName=cl.name;if(cl.sellerId&&!next.sellerId)next.sellerId=cl.sellerId;}}
     if(k==="reservationAmount"&&isNew) next.paidAmount=v;
@@ -315,6 +315,7 @@ function ModalClassEdit({data,staff,clients,config,onSave,onClose}){
 
   async function submit(){
     if(!form.amount||!form.clientName) return;
+    if(form.classTypeId===_halfDayId&&!form.horarioInicio){ alert("Elegí el turno del Half Day: Mañana o Tarde."); return; }
     setSaving(true);
     try {
       for (const date of (isNew ? classDates : [form.classDate])) {
