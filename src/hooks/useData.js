@@ -199,6 +199,7 @@ export function useClasses() {
       class_done:          !!formData.classDone,
       discipline:          formData.discipline || "ski",
       is_required:         !!formData.isRequired,
+      horario_inicio:      formData.horarioInicio || null,
       // El trigger de Supabase calcula automáticamente:
       // scenario, seller_commission, instructor_earning,
       // school_cut, payment_status, instructor_status

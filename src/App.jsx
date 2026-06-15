@@ -278,8 +278,8 @@ function ClientDetailCard({client,allClasses,staff,onBack,backLabel,isAdmin=true
 // ─── MODAL: CLASE ──────────────────────────────────────────────────────────────
 function ModalClassEdit({data,staff,clients,config,onSave,onClose}){
   const isNew=!data;
-  const empty={classDate:today,classTypeId:"",amount:"550",peopleCount:"1",sellerId:"",instructorId:"",clientId:"",clientName:"",notes:"",reservationAmount:"",paidAmount:"",classDone:false,discipline:"ski"};
-  const [form,setForm]=useState(data?{...data,amount:String(data.amount),peopleCount:String(data.peopleCount),reservationAmount:String(data.reservationAmount||0),paidAmount:String(data.paidAmount||0),sellerId:data.sellerId||"",instructorId:data.instructorId||"",clientId:data.clientId||""}:empty);
+  const empty={classDate:today,classTypeId:"",amount:"550",peopleCount:"1",sellerId:"",instructorId:"",clientId:"",clientName:"",notes:"",reservationAmount:"",paidAmount:"",classDone:false,discipline:"ski",horarioInicio:""};
+  const [form,setForm]=useState(data?{...data,amount:String(data.amount),peopleCount:String(data.peopleCount),reservationAmount:String(data.reservationAmount||0),paidAmount:String(data.paidAmount||0),sellerId:data.sellerId||"",instructorId:data.instructorId||"",clientId:data.clientId||"",horarioInicio:data.horarioInicio||""}:empty);
   const [preview,setPreview]=useState(null);
   const [classDates, setClassDates] = useState([today]);
   const [saving,setSaving]=useState(false);
@@ -290,9 +290,18 @@ function ModalClassEdit({data,staff,clients,config,onSave,onClose}){
   const ps=PAY_STATUS[payStatus];
   const saldo=Math.max(0,(+form.amount||0)-(+form.paidAmount||0));
 
+  const _fullDayId = config.rates.find(r=>r.name==="Full Day")?.id;
+  const _miniDayId = config.rates.find(r=>r.name==="Mini Day")?.id;
+  const _halfDayId = config.rates.find(r=>r.name==="Half Day")?.id;
+
   function set(k,v){
     const next={...form,[k]:v};
-    if(k==="classTypeId"){const r=config.rates.find(x=>x.id===v);if(r)next.amount=String(r.amount);}
+    if(k==="classTypeId"){
+      const r=config.rates.find(x=>x.id===v);
+      if(r) next.amount=String(r.amount);
+      if(v===_fullDayId||v===_miniDayId) next.horarioInicio="09:30";
+      else if(v!==_halfDayId) next.horarioInicio=""; // Half Day: no tocar, el user elige
+    }
     if(k==="clientId"&&v){const cl=clients.find(c=>c.id===v);if(cl){next.clientName=cl.name;if(cl.sellerId&&!next.sellerId)next.sellerId=cl.sellerId;}}
     if(k==="reservationAmount"&&isNew) next.paidAmount=v;
     setForm(next);
@@ -330,6 +339,31 @@ function ModalClassEdit({data,staff,clients,config,onSave,onClose}){
 ))}
             <Inp label="Tipo" value={form.classTypeId} onChange={v=>set("classTypeId",v)} options={config.rates.map(r=>({value:r.id,label:`${r.name} — ${fmt(r.amount)}`}))}/>
           </div>
+          {/* ── Horario según tipo de clase ── */}
+          {form.classTypeId===_fullDayId||form.classTypeId===_miniDayId ? (
+            <div style={{background:`${T.accent}10`,border:`1px solid ${T.accent}30`,borderRadius:8,padding:"8px 12px",fontSize:12,color:T.textDim}}>
+              🕘 Horario fijo: <strong style={{color:T.text}}>09:30</strong>
+            </div>
+          ) : form.classTypeId===_halfDayId ? (
+            <div style={{display:"flex",flexDirection:"column",gap:6}}>
+              <div style={{fontSize:11,color:T.textDim,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.07em"}}>Turno</div>
+              <div style={{display:"flex",gap:8}}>
+                {[["09:30","🌅 Mañana","9:30 – 12:30"],["13:00","🌇 Tarde","13:00 – 16:00"]].map(([val,lbl,rng])=>(
+                  <button key={val} onClick={()=>set("horarioInicio",val)} type="button"
+                    style={{flex:1,background:form.horarioInicio===val?`${T.purple}25`:`${T.surface}`,
+                      border:`2px solid ${form.horarioInicio===val?T.purple:T.border}`,
+                      color:form.horarioInicio===val?T.purple:T.textDim,
+                      borderRadius:8,padding:"10px 8px",cursor:"pointer",fontFamily:"inherit",
+                      fontWeight:form.horarioInicio===val?800:500,transition:"all .15s"}}>
+                    <div style={{fontSize:13}}>{lbl}</div>
+                    <div style={{fontSize:10,marginTop:2,opacity:.7}}>{rng}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : form.classTypeId ? (
+            <Inp label="Horario inicio (opc.)" type="time" value={form.horarioInicio||""} onChange={v=>set("horarioInicio",v)}/>
+          ) : null}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
             <Inp label="Monto Total USD" type="number" value={form.amount} onChange={v=>set("amount",v)} required/>
             <Inp label="Personas" type="number" value={form.peopleCount} onChange={v=>set("peopleCount",v)}/>
