@@ -201,22 +201,42 @@ function HalfDayModal({ onChoose, onCancel }) {
 }
 
 // ─── DRAGGABLE CLASS CHIP (tarjeta arrastrable en pending/unassigned) ─────────
-function DraggableChip({ cls, color }) {
+function DraggableChip({ cls, color, onEdit }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: cls.id, data: { cls } });
+  const dur = classDuration(cls);
+  const durLabel = dur % 60 === 0 ? `${dur/60}hs` : `${Math.floor(dur/60)}h${dur%60}m`;
   return (
-    <div ref={setNodeRef} {...listeners} {...attributes}
+    <div ref={setNodeRef}
       style={{ background: `${color}18`, border: `1px solid ${color}40`, borderRadius: 7,
-        padding: "5px 9px", fontSize: 11, cursor: "grab", opacity: isDragging ? 0.35 : 1,
-        display: "flex", flexDirection: "column", gap: 2, minWidth: 90, touchAction: "none" }}>
-      <span style={{ fontWeight: 700, color, whiteSpace: "nowrap", overflow: "hidden",
-        textOverflow: "ellipsis", maxWidth: 120 }}>{cls.clientName}</span>
-      <span style={{ color: T.textDim }}>{cls.classTypeName || "—"}</span>
+        padding: "5px 9px", fontSize: 11, opacity: isDragging ? 0.35 : 1,
+        display: "flex", flexDirection: "column", gap: 2, minWidth: 100,
+        touchAction: "none", position: "relative" }}>
+      {/* área de drag */}
+      <div {...listeners} {...attributes} style={{ cursor: "grab" }}>
+        <span style={{ fontWeight: 700, color, whiteSpace: "nowrap", overflow: "hidden",
+          textOverflow: "ellipsis", maxWidth: 130, display: "block" }}>{cls.clientName}</span>
+        <span style={{ color: T.textDim }}>
+          {cls.classTypeName || "—"} · {durLabel}
+        </span>
+      </div>
+      {/* botón editar — detiene el pointer para no activar el drag */}
+      {onEdit && (
+        <button
+          onPointerDown={e => e.stopPropagation()}
+          onClick={() => onEdit(cls)}
+          style={{ position: "absolute", top: 3, right: 3, background: "none", border: "none",
+            color: T.textDim, cursor: "pointer", fontSize: 12, padding: "1px 3px",
+            lineHeight: 1, borderRadius: 4 }}
+          title="Editar clase">
+          ✎
+        </button>
+      )}
     </div>
   );
 }
 
 // ─── DRAGGABLE CLASS BLOCK (bloque en la línea de tiempo) ────────────────────
-function ClassBlock({ cls, pxPerMin, color }) {
+function ClassBlock({ cls, pxPerMin, color, onEdit }) {
   const startMin = timeToMin(cls.horarioInicio);
   const dur = classDuration(cls);
   const left = (startMin - DAY_START_MIN) * pxPerMin;
@@ -234,7 +254,9 @@ function ClassBlock({ cls, pxPerMin, color }) {
         padding: "5px 7px", boxSizing: "border-box", touchAction: "none",
         display: "flex", flexDirection: "column", justifyContent: "center", gap: 2 }}>
       <div style={{ fontSize: 11, fontWeight: 800, color, whiteSpace: "nowrap",
-        overflow: "hidden", textOverflow: "ellipsis" }}>{cls.clientName}</div>
+        overflow: "hidden", textOverflow: "ellipsis", paddingRight: onEdit ? 16 : 0 }}>
+        {cls.clientName}
+      </div>
       {width > 70 && (
         <div style={{ fontSize: 10, color: T.textDim, whiteSpace: "nowrap" }}>
           {fmtTime(cls.horarioInicio)} – {endStr}
@@ -243,6 +265,18 @@ function ClassBlock({ cls, pxPerMin, color }) {
       {width > 110 && cls.classTypeName && (
         <div style={{ fontSize: 9, color, opacity: 0.7, whiteSpace: "nowrap",
           overflow: "hidden", textOverflow: "ellipsis" }}>{cls.classTypeName}</div>
+      )}
+      {/* botón editar — detiene el pointer para no activar el drag */}
+      {onEdit && (
+        <button
+          onPointerDown={e => e.stopPropagation()}
+          onClick={() => onEdit(cls)}
+          style={{ position: "absolute", top: 3, right: 3, background: `${color}30`,
+            border: "none", color, cursor: "pointer", fontSize: 11, padding: "1px 4px",
+            lineHeight: 1, borderRadius: 3 }}
+          title="Editar clase">
+          ✎
+        </button>
       )}
     </div>
   );
@@ -286,13 +320,12 @@ function TimeAxisHeader({ pxPerMin }) {
 }
 
 // ─── INSTRUCTOR ROW ───────────────────────────────────────────────────────────
-function InstructorRow({ instr, date, classes, pxPerMin }) {
+function InstructorRow({ instr, date, classes, pxPerMin, onEdit }) {
   const onTimeline = classes.filter(c => c.horarioInicio);
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0",
       borderBottom: `1px solid ${T.border}30` }}>
-      {/* Label */}
       <div style={{ width: 132, flexShrink: 0, display: "flex", alignItems: "center", gap: 7 }}>
         <Av name={instr.name} size={28} color={T.purple} />
         <span style={{ fontSize: 12, fontWeight: 700, color: T.text, overflow: "hidden",
@@ -301,7 +334,7 @@ function InstructorRow({ instr, date, classes, pxPerMin }) {
 
       <TimelineDropArea instrId={instr.id} date={date} pxPerMin={pxPerMin}>
         {onTimeline.map(c => (
-          <ClassBlock key={c.id} cls={c} pxPerMin={pxPerMin} color={classColor(c)} />
+          <ClassBlock key={c.id} cls={c} pxPerMin={pxPerMin} color={classColor(c)} onEdit={onEdit} />
         ))}
       </TimelineDropArea>
     </div>
@@ -309,7 +342,7 @@ function InstructorRow({ instr, date, classes, pxPerMin }) {
 }
 
 // ─── UNASSIGNED BUCKET ────────────────────────────────────────────────────────
-function UnassignedBucket({ classes, date }) {
+function UnassignedBucket({ classes, date, onEdit }) {
   const { setNodeRef, isOver } = useDroppable({
     id: `unassigned-${date}`,
     data: { type: "unassigned", date },
@@ -326,7 +359,7 @@ function UnassignedBucket({ classes, date }) {
           border: `1px dashed ${isOver ? T.red : T.border}`, borderRadius: 10, minHeight: 48 }}>
         {classes.length === 0
           ? <span style={{ fontSize: 11, color: T.muted }}>— Todas las clases tienen instructor asignado —</span>
-          : classes.map(c => <DraggableChip key={c.id} cls={c} color={T.red} />)
+          : classes.map(c => <DraggableChip key={c.id} cls={c} color={T.red} onEdit={onEdit} />)
         }
       </div>
     </div>
@@ -348,7 +381,7 @@ function DragPreview({ cls }) {
 }
 
 // ─── PLANNING ADMIN VIEW ──────────────────────────────────────────────────────
-function PlanningAdminView({ classes, staff, onUpdate }) {
+function PlanningAdminView({ classes, staff, onUpdate, onEdit }) {
   const [anchorDate, setAnchorDate] = useState(todayStr);
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [halfDayPending, setHalfDayPending] = useState(null);
@@ -508,6 +541,7 @@ function PlanningAdminView({ classes, staff, onUpdate }) {
                 date={selectedDate}
                 classes={byInstructor(instr.id)}
                 pxPerMin={pxPerMin}
+                onEdit={onEdit}
               />
             ))}
             {instructors.length === 0 && (
@@ -520,7 +554,7 @@ function PlanningAdminView({ classes, staff, onUpdate }) {
       </div>
 
       {/* UNASSIGNED */}
-      <UnassignedBucket classes={unassigned} date={selectedDate} />
+      <UnassignedBucket classes={unassigned} date={selectedDate} onEdit={onEdit} />
 
       {/* HALF DAY MODAL */}
       {halfDayPending && (
@@ -703,7 +737,7 @@ export function PlanningInstructorView({ classes, staffMember }) {
 }
 
 // ─── EXPORT PRINCIPAL ─────────────────────────────────────────────────────────
-export default function PlanningView({ classes, staff, isAdmin, staffProfile, onUpdate }) {
+export default function PlanningView({ classes, staff, isAdmin, staffProfile, onUpdate, onEdit }) {
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
@@ -718,7 +752,7 @@ export default function PlanningView({ classes, staff, isAdmin, staffProfile, on
       </div>
 
       {isAdmin ? (
-        <PlanningAdminView classes={classes} staff={staff} onUpdate={onUpdate} />
+        <PlanningAdminView classes={classes} staff={staff} onUpdate={onUpdate} onEdit={onEdit} />
       ) : (
         <PlanningInstructorView classes={classes} staffMember={staffProfile} />
       )}

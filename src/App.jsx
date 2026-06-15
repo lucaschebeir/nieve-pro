@@ -807,7 +807,7 @@ function AdminApp() {
       </div>
       {/* PAGES */}
       <div style={{padding:24,maxWidth:1360,margin:"0 auto"}}>
-        {page==="planning" &&<PlanningView classes={classes} staff={staff} isAdmin={true} onUpdate={updateClassSchedule}/>}
+        {page==="planning" &&<PlanningView classes={classes} staff={staff} isAdmin={true} onUpdate={updateClassSchedule} onEdit={c=>setModal({type:"class_edit",data:c})}/>}
         {page==="dashboard"&&<DashboardPage staff={staff} classes={classes} settlements={settlements} clients={clients} getBalance={getBalance} onSettle={s=>setModal({type:"settle",data:{staffId:s.id,name:s.name}})} onToggle={handleToggle} onViewStaff={s=>{setSelectedStaffId(s.id);setPage("staff");}}/>}
         {page==="classes"  &&<ClassesPage classes={classes} staff={staff} clients={clients} onEdit={c=>setModal({type:"class_edit",data:c})} onNew={()=>setModal({type:"class_edit",data:null})} onClientClick={goToClient} onFinanceClick={c=>setModal({type:"class_finance",data:c})}onDelete={async(id)=>{await deleteClass(id);showToast("✓ Clase eliminada")}}/>}
         {page==="clients"  &&<ClientsPage clients={clients} staff={staff} classes={classes} selectedClientId={selectedClientId} onClearSelected={()=>setSelectedClientId(null)} onEdit={c=>setModal({type:"client_edit",data:c})} onNew={()=>setModal({type:"client_edit",data:null})}/>}
