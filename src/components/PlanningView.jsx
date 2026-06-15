@@ -701,6 +701,7 @@ function PlanningAdminView({ classes, staff, onUpdate, onEdit, onDelete }) {
   }
 
   function resolveAndSave(cls, instrId, startMin, dur) {
+    if (!onUpdate) return;
     // Chequeo de superposición
     const others = dayClasses.filter(c =>
       c.id !== cls.id &&

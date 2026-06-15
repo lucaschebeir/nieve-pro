@@ -641,7 +641,7 @@ function calcEarnings(amount,scenario,seller,instructor,schoolCutPct,hours){
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 function AdminApp() {
-  const { staffProfile, signOut, isAdmin, session } = useAuth();
+  const { staffProfile, signOut, isAdmin, isViewer, session } = useAuth();
   const { staff, loading: sL, toggleActive, saveStaff } = useStaff();
   const { clients, loading: cL, saveClient } = useClients();
   const { classes, loading: clL, saveClass, deleteClass, updateClassSchedule } = useClasses();
@@ -784,8 +784,8 @@ function AdminApp() {
 
   if (!session) return <LoginScreen/>;
 
-  // Staff no-admin va directo a su portal personal
-  if (!isAdmin) {
+  // Staff no-admin y no-viewer va directo a su portal personal
+  if (!isAdmin && !isViewer) {
     return <StaffPortalPage staffMember={staffProfile} staff={staff} classes={classes} settlements={settlements} clients={clients} balance={getBalance(staffProfile?.id)} onSignOut={signOut}/>;
   }
 
@@ -811,11 +811,11 @@ function AdminApp() {
       <div style={{background:T.surface,borderBottom:`1px solid ${T.border}`,padding:"0 24px",display:"flex",alignItems:"center",justifyContent:"space-between",height:54,position:"sticky",top:0,zIndex:100}}>
         <div style={{display:"flex",alignItems:"center",gap:14}}>
           <div style={{fontSize:18,fontWeight:900,letterSpacing:"-0.04em",background:"linear-gradient(130deg,#60a5fa 0%,#a78bfa 60%,#f0a500 100%)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>⛷ APEX</div>
-          <Badge text="ADMIN" color={T.gold}/>
+          <Badge text={isViewer ? "VIEWER" : "ADMIN"} color={isViewer ? T.purple : T.gold}/>
         </div>
         <div style={{display:"flex",gap:8}}>
           <Btn variant="ghost" size="sm" onClick={handleExport}>↓ Excel</Btn>
-          <Btn variant="primary" size="sm" onClick={()=>setModal({type:"class_edit",data:null})}>＋ Nueva Clase</Btn>
+          {!isViewer && <Btn variant="primary" size="sm" onClick={()=>setModal({type:"class_edit",data:null})}>＋ Nueva Clase</Btn>}
           <Btn variant="ghost" size="sm" onClick={signOut}>Salir</Btn>
         </div>
       </div>
@@ -829,12 +829,12 @@ function AdminApp() {
       </div>
       {/* PAGES */}
       <div style={{padding:24,maxWidth:1360,margin:"0 auto"}}>
-        {page==="planning" &&<PlanningView classes={classes} staff={staff} isAdmin={true} onUpdate={updateClassSchedule} onEdit={c=>setModal({type:"class_edit",data:c})} onDelete={async(id)=>{await deleteClass(id);showToast("✓ Clase eliminada")}}/>}
-        {page==="dashboard"&&<DashboardPage staff={staff} classes={classes} settlements={settlements} clients={clients} getBalance={getBalance} onSettle={s=>setModal({type:"settle",data:{staffId:s.id,name:s.name}})} onToggle={handleToggle} onViewStaff={s=>{setSelectedStaffId(s.id);setPage("staff");}}/>}
-        {page==="classes"  &&<ClassesPage classes={classes} staff={staff} clients={clients} onEdit={c=>setModal({type:"class_edit",data:c})} onNew={()=>setModal({type:"class_edit",data:null})} onClientClick={goToClient} onFinanceClick={c=>setModal({type:"class_finance",data:c})}onDelete={async(id)=>{await deleteClass(id);showToast("✓ Clase eliminada")}}/>}
-        {page==="clients"  &&<ClientsPage clients={clients} staff={staff} classes={classes} selectedClientId={selectedClientId} onClearSelected={()=>setSelectedClientId(null)} onEdit={c=>setModal({type:"client_edit",data:c})} onNew={()=>setModal({type:"client_edit",data:null})}/>}
-        {page==="staff"    &&<StaffPage staff={staff} getBalance={getBalance} settlements={settlements} clients={clients} classes={classes} selectedStaffId={selectedStaffId} onClearSelected={()=>setSelectedStaffId(null)} onToggle={handleToggle} onEdit={s=>setModal({type:"staff_edit",data:s})} onNew={()=>setModal({type:"staff_edit",data:null})} onSettle={s=>setModal({type:"settle",data:{staffId:s.id,name:s.name}})}extraCommissions={extraCommissions} onAddExtra={s=>setModal({type:"extra_commission",data:s})} onDeleteExtra={async(id)=>{await deleteExtraCommission(id);showToast("✓ Comisión eliminada");}}/>}
-        {page==="finanzas" &&<FinanzasPage classes={classes} expenses={expenses} staff={staff} onAddExpense={addExpense}/>}
+        {page==="planning" &&<PlanningView classes={classes} staff={staff} isAdmin={true} onUpdate={isViewer?undefined:updateClassSchedule} onEdit={isViewer?undefined:c=>setModal({type:"class_edit",data:c})} onDelete={isViewer?undefined:async(id)=>{await deleteClass(id);showToast("✓ Clase eliminada")}}/>}
+        {page==="dashboard"&&<DashboardPage staff={staff} classes={classes} settlements={settlements} clients={clients} getBalance={getBalance} onSettle={isViewer?undefined:s=>setModal({type:"settle",data:{staffId:s.id,name:s.name}})} onToggle={isViewer?undefined:handleToggle} onViewStaff={s=>{setSelectedStaffId(s.id);setPage("staff");}}/>}
+        {page==="classes"  &&<ClassesPage classes={classes} staff={staff} clients={clients} onEdit={isViewer?undefined:c=>setModal({type:"class_edit",data:c})} onNew={isViewer?undefined:()=>setModal({type:"class_edit",data:null})} onClientClick={goToClient} onFinanceClick={c=>setModal({type:"class_finance",data:c})} onDelete={isViewer?undefined:async(id)=>{await deleteClass(id);showToast("✓ Clase eliminada")}}/>}
+        {page==="clients"  &&<ClientsPage clients={clients} staff={staff} classes={classes} selectedClientId={selectedClientId} onClearSelected={()=>setSelectedClientId(null)} onEdit={isViewer?undefined:c=>setModal({type:"client_edit",data:c})} onNew={isViewer?undefined:()=>setModal({type:"client_edit",data:null})}/>}
+        {page==="staff"    &&<StaffPage staff={staff} getBalance={getBalance} settlements={settlements} clients={clients} classes={classes} selectedStaffId={selectedStaffId} onClearSelected={()=>setSelectedStaffId(null)} onToggle={isViewer?undefined:handleToggle} onEdit={isViewer?undefined:s=>setModal({type:"staff_edit",data:s})} onNew={isViewer?undefined:()=>setModal({type:"staff_edit",data:null})} onSettle={isViewer?undefined:s=>setModal({type:"settle",data:{staffId:s.id,name:s.name}})} extraCommissions={extraCommissions} onAddExtra={isViewer?undefined:s=>setModal({type:"extra_commission",data:s})} onDeleteExtra={isViewer?undefined:async(id)=>{await deleteExtraCommission(id);showToast("✓ Comisión eliminada");}}/>}
+        {page==="finanzas" &&<FinanzasPage classes={classes} expenses={expenses} staff={staff} onAddExpense={isViewer?undefined:addExpense}/>}
         {page==="search"   &&<SearchPage clients={clients} classes={classes} staff={staff} onViewClient={c=>{setSelectedClientId(c.id);setPage("clients");}}/>}
         {page==="config"   &&<ConfigPage config={config} onSave={async (c)=>{await saveConfig(c);showToast("✓ Configuración guardada");}} staff={staff} onSaveStaff={handleSaveStaff}/>}
       </div>
