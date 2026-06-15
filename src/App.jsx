@@ -278,8 +278,20 @@ function ClientDetailCard({client,allClasses,staff,onBack,backLabel,isAdmin=true
 // ─── MODAL: CLASE ──────────────────────────────────────────────────────────────
 function ModalClassEdit({data,staff,clients,config,onSave,onClose}){
   const isNew=!data;
+  // IDs definidos antes del useState para poder usarlos en el valor inicial
+  const _fullDayId = config.rates.find(r=>r.name==="Full Day")?.id;
+  const _miniDayId = config.rates.find(r=>r.name==="Mini Day")?.id;
+  const _halfDayId = config.rates.find(r=>r.name==="Half Day")?.id;
+
+  function autoHorario(typeId, existing) {
+    if(existing) return existing;
+    if(!typeId) return "";
+    if(typeId===_halfDayId) return ""; // el usuario elige mañana/tarde
+    return "09:30";
+  }
+
   const empty={classDate:today,classTypeId:"",amount:"550",peopleCount:"1",sellerId:"",instructorId:"",clientId:"",clientName:"",notes:"",reservationAmount:"",paidAmount:"",classDone:false,discipline:"ski",horarioInicio:""};
-  const [form,setForm]=useState(data?{...data,amount:String(data.amount),peopleCount:String(data.peopleCount),reservationAmount:String(data.reservationAmount||0),paidAmount:String(data.paidAmount||0),sellerId:data.sellerId||"",instructorId:data.instructorId||"",clientId:data.clientId||"",horarioInicio:data.horarioInicio||""}:empty);
+  const [form,setForm]=useState(data?{...data,amount:String(data.amount),peopleCount:String(data.peopleCount),reservationAmount:String(data.reservationAmount||0),paidAmount:String(data.paidAmount||0),sellerId:data.sellerId||"",instructorId:data.instructorId||"",clientId:data.clientId||"",horarioInicio:autoHorario(data.classTypeId,data.horarioInicio)}:empty);
   const [preview,setPreview]=useState(null);
   const [classDates, setClassDates] = useState([today]);
   const [saving,setSaving]=useState(false);
@@ -289,10 +301,6 @@ function ModalClassEdit({data,staff,clients,config,onSave,onClose}){
   const payStatus=form.paidAmount>0?(+form.paidAmount>=(+form.amount)?'paid':'partial'):'reserved';
   const ps=PAY_STATUS[payStatus];
   const saldo=Math.max(0,(+form.amount||0)-(+form.paidAmount||0));
-
-  const _fullDayId = config.rates.find(r=>r.name==="Full Day")?.id;
-  const _miniDayId = config.rates.find(r=>r.name==="Mini Day")?.id;
-  const _halfDayId = config.rates.find(r=>r.name==="Half Day")?.id;
 
   function set(k,v){
     const next={...form,[k]:v};
