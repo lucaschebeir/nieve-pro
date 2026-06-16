@@ -218,8 +218,9 @@ export function useClasses() {
           .from("classes")
           .insert(payload);
         if (error) throw error;
-}
+      }
     }
+    refetch();
   }
 
   const mapped = data.map(c => ({

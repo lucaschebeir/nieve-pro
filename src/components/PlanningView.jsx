@@ -120,7 +120,7 @@ function addDays(dateStr, n) {
   return d.toISOString().split("T")[0];
 }
 
-const todayStr = new Date().toISOString().split("T")[0];
+function todayStr() { return new Date().toISOString().split("T")[0]; }
 
 // ─── COLORES POR TIPO ─────────────────────────────────────────────────────────
 const TYPE_COLORS = {
@@ -568,8 +568,8 @@ function DragPreview({ cls }) {
 
 // ─── PLANNING ADMIN VIEW ──────────────────────────────────────────────────────
 function PlanningAdminView({ classes, staff, onUpdate, onEdit, onDelete }) {
-  const [anchorDate, setAnchorDate] = useState(todayStr);
-  const [selectedDate, setSelectedDate] = useState(todayStr);
+  const [anchorDate, setAnchorDate] = useState(todayStr());
+  const [selectedDate, setSelectedDate] = useState(todayStr());
   const [halfDayPending, setHalfDayPending] = useState(null);
   const [activeCls, setActiveCls] = useState(null);
   const [overlapWarn, setOverlapWarn] = useState(null);
@@ -731,7 +731,7 @@ function PlanningAdminView({ classes, staff, onUpdate, onEdit, onDelete }) {
         <Btn variant="ghost" size="sm" onClick={() => setAnchorDate(d => addWeeks(d, -1))}>← Semana anterior</Btn>
         <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{fmtWeekRange(weekDays)}</span>
         <Btn variant="ghost" size="sm" onClick={() => setAnchorDate(d => addWeeks(d, 1))}>Semana siguiente →</Btn>
-        <Btn variant="ghost" size="sm" onClick={() => { setAnchorDate(todayStr); setSelectedDate(todayStr); }}
+        <Btn variant="ghost" size="sm" onClick={() => { const t = todayStr(); setAnchorDate(t); setSelectedDate(t); }}
           style={{ marginLeft: "auto" }}>Hoy</Btn>
       </div>
 
@@ -824,7 +824,7 @@ const PAY_INFO = {
 };
 
 export function PlanningInstructorView({ classes, staffMember }) {
-  const [anchorDate, setAnchorDate] = useState(todayStr);
+  const [anchorDate, setAnchorDate] = useState(todayStr());
   const [unavailByDate, setUnavailByDate] = useState(new Map());
 
   const weekDays = getWeekDays(anchorDate);
@@ -915,8 +915,9 @@ export function PlanningInstructorView({ classes, staffMember }) {
   }
 
   function DaySection({ d }) {
-    const isToday = d === todayStr;
-    const isPast  = d < todayStr;
+    const today   = todayStr();
+    const isToday = d === today;
+    const isPast  = d < today;
     const unavail = unavailByDate.get(d);
     const dayClasses = classes
       .filter(c => c.instructorId === staffMember?.id && c.classDate === d)
@@ -984,7 +985,7 @@ export function PlanningInstructorView({ classes, staffMember }) {
           <div style={{ fontWeight: 700, fontSize: 13, color: T.text }}>{fmtWeekRange(weekDays)}</div>
         </div>
         <Btn variant="ghost" size="sm" onClick={() => setAnchorDate(d => addWeeks(d, 1))}>→</Btn>
-        <Btn variant="ghost" size="sm" onClick={() => setAnchorDate(todayStr)}>Hoy</Btn>
+        <Btn variant="ghost" size="sm" onClick={() => setAnchorDate(todayStr())}>Hoy</Btn>
       </div>
       <div style={{ fontSize: 11, color: T.textDim, textAlign: "center", marginBottom: 20 }}>
         {totalSemana === 0 ? "Sin clases esta semana" : `${totalSemana} clase${totalSemana !== 1 ? "s" : ""} esta semana`}
