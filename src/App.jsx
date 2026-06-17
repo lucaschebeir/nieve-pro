@@ -867,14 +867,30 @@ function AdminApp() {
 // Solo cambia que reciben datos reales en lugar de mock
 
 function DashboardPage({staff,classes,settlements,clients,getBalance,onSettle,onToggle,onViewStaff}){
+  const [season,setSeason]=useState("current");
+  const {sfrom,sto}=useMemo(()=>{
+    if(season==="current") return {sfrom:seasonRange().from,sto:seasonRange().to};
+    if(season==="last")    return {sfrom:seasonRange(-1).from,sto:seasonRange(-1).to};
+    return {sfrom:"2000-01-01",sto:"2099-12-31"};
+  },[season]);
+  const seasonClasses=useMemo(()=>classes.filter(c=>c.classDate>=sfrom&&c.classDate<=sto),[classes,sfrom,sto]);
   const totalPending=staff.reduce((a,s)=>a+getBalance(s.id).pendingAmount,0);
-  const totalSettled=settlements.reduce((a,s)=>a+s.totalEarned,0);
-  const unassigned=classes.filter(c=>!c.isSettled&&c.instructorStatus==="unassigned").length;
+  const totalSettled=settlements.filter(s=>s.settledAt>=sfrom&&s.settledAt<=sto).reduce((a,s)=>a+s.totalEarned,0);
+  const unassigned=seasonClasses.filter(c=>!c.isSettled&&c.instructorStatus==="unassigned").length;
   return(
     <div style={{display:"flex",flexDirection:"column",gap:24}}>
+      <Card style={{padding:"12px 18px"}}>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+          <span style={{fontSize:11,color:T.muted,fontWeight:700}}>TEMPORADA:</span>
+          {[["current","Esta temporada"],["last","Temporada anterior"],["all","Todo"]].map(([v,l])=>(
+            <Btn key={v} variant={season===v?"primary":"ghost"} size="sm" onClick={()=>setSeason(v)}>{l}</Btn>
+          ))}
+          <span style={{marginLeft:"auto",fontSize:12,color:T.textDim}}><b style={{color:T.text}}>{seasonClasses.length}</b> clases · <span style={{color:T.muted,fontSize:11}}>A pagar staff = siempre pendiente total</span></span>
+        </div>
+      </Card>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:14}}>
         <Card><Stat label="A Pagar Staff" value={fmt(totalPending)} color={T.gold} icon="⚠"/></Card>
-        <Card><Stat label="Total Liquidado" value={fmt(totalSettled)} color={T.green} icon="✓"/></Card>
+        <Card><Stat label="Liquidado en período" value={fmt(totalSettled)} color={T.green} icon="✓"/></Card>
         <Card><Stat label="Sin Instructor" value={unassigned} color={T.red} icon="⚠"/></Card>
         <Card><Stat label="Total Staff" value={staff.filter(s=>s.isActive).length} color={T.cyan} sub="activos"/></Card>
       </div>
