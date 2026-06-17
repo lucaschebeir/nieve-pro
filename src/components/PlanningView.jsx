@@ -113,6 +113,28 @@ function addWeeks(dateStr, n) {
   return d.toISOString().split("T")[0];
 }
 
+function addMonths(dateStr, n) {
+  const d = new Date(dateStr + "T12:00:00");
+  d.setMonth(d.getMonth() + n);
+  return d.toISOString().split("T")[0];
+}
+
+function getMonthGrid(anchorDate) {
+  const d = new Date(anchorDate + "T12:00:00");
+  const year = d.getFullYear();
+  const month = d.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDow = firstDay.getDay(); // 0=Dom
+  const leadingBlanks = firstDow === 0 ? 6 : firstDow - 1;
+  const days = Array.from({ length: daysInMonth }, (_, i) => {
+    const day = new Date(year, month, i + 1);
+    return day.toISOString().split("T")[0];
+  });
+  const monthLabel = firstDay.toLocaleDateString("es-AR", { month: "long", year: "numeric" });
+  return { days, leadingBlanks, monthLabel };
+}
+
 function addDays(dateStr, n) {
   const d = new Date(dateStr + "T12:00:00");
   d.setDate(d.getDate() + n);
@@ -566,9 +588,9 @@ function DragPreview({ cls }) {
 }
 
 // ─── PLANNING ADMIN VIEW ──────────────────────────────────────────────────────
-function PlanningAdminView({ classes, staff, onUpdate, onEdit, onDelete }) {
-  const [anchorDate, setAnchorDate] = useState(todayStr());
-  const [selectedDate, setSelectedDate] = useState(todayStr());
+function PlanningAdminView({ classes, staff, onUpdate, onEdit, onDelete, initialDate }) {
+  const [anchorDate, setAnchorDate] = useState(initialDate || todayStr());
+  const [selectedDate, setSelectedDate] = useState(initialDate || todayStr());
   const [halfDayPending, setHalfDayPending] = useState(null);
   const [activeCls, setActiveCls] = useState(null);
   const [overlapWarn, setOverlapWarn] = useState(null);
@@ -996,23 +1018,181 @@ export function PlanningInstructorView({ classes, staffMember }) {
   );
 }
 
-// ─── EXPORT PRINCIPAL ─────────────────────────────────────────────────────────
-export default function PlanningView({ classes, staff, isAdmin, staffProfile, onUpdate, onEdit, onDelete }) {
+// ─── PLANNING WEEK OVERVIEW (admin) ──────────────────────────────────────────
+function PlanningWeekOverview({ classes, staff, onEdit }) {
+  const [anchorDate, setAnchorDate] = useState(todayStr());
+  const weekDays = getWeekDays(anchorDate);
+  const today = todayStr();
+
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+        <Btn variant="ghost" size="sm" onClick={() => setAnchorDate(d => addWeeks(d, -1))}>← Anterior</Btn>
+        <span style={{ fontSize: 13, fontWeight: 700, color: T.text, flex: 1, textAlign: "center" }}>{fmtWeekRange(weekDays)}</span>
+        <Btn variant="ghost" size="sm" onClick={() => setAnchorDate(d => addWeeks(d, 1))}>Siguiente →</Btn>
+        <Btn variant="ghost" size="sm" onClick={() => setAnchorDate(todayStr())}>Hoy</Btn>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(140px, 1fr))", gap: 6, overflowX: "auto" }}>
+        {weekDays.map(d => {
+          const dayClasses = classes
+            .filter(c => c.classDate === d)
+            .sort((a, b) => (timeToMin(a.horarioInicio) ?? 9999) - (timeToMin(b.horarioInicio) ?? 9999));
+          const isToday = d === today;
+          const total = dayClasses.reduce((a, c) => a + c.amount, 0);
+          return (
+            <div key={d} style={{ background: isToday ? `${T.accent}08` : T.card,
+              border: `1px solid ${isToday ? T.accent : T.border}`, borderRadius: 10, overflow: "hidden" }}>
+              <div style={{ padding: "7px 10px", background: isToday ? `${T.accent}18` : T.surface,
+                borderBottom: `1px solid ${T.border}` }}>
+                <div style={{ fontWeight: 800, fontSize: 12, color: isToday ? T.accent : T.text, textTransform: "capitalize" }}>
+                  {fmtDayHeader(d)}
+                  {isToday && <span style={{ marginLeft: 6, background: T.accent, color: T.white, fontSize: 9, padding: "1px 5px", borderRadius: 20 }}>HOY</span>}
+                </div>
+                <div style={{ fontSize: 10, color: T.textDim, marginTop: 1 }}>
+                  {dayClasses.length > 0 ? `${dayClasses.length} clase(s) · $${total.toLocaleString("es-AR")}` : "Sin clases"}
+                </div>
+              </div>
+              <div style={{ padding: 5, display: "flex", flexDirection: "column", gap: 4, minHeight: 80 }}>
+                {dayClasses.map(c => {
+                  const color = classColor(c);
+                  const instr = staff.find(s => s.id === c.instructorId);
+                  const startMin = timeToMin(c.horarioInicio);
+                  const endStr = startMin != null ? fmtTime(minToTime(startMin + classDuration(c))) : null;
+                  return (
+                    <div key={c.id} onClick={() => onEdit && onEdit(c)}
+                      style={{ background: `${color}14`, border: `1px solid ${color}30`,
+                        borderLeft: `3px solid ${color}`, borderRadius: 6, padding: "4px 7px",
+                        cursor: onEdit ? "pointer" : "default", fontSize: 11 }}>
+                      {c.horarioInicio && (
+                        <div style={{ color: T.textDim, fontSize: 10, marginBottom: 1 }}>
+                          {fmtTime(c.horarioInicio)}{endStr ? ` – ${endStr}` : ""}
+                        </div>
+                      )}
+                      <div style={{ fontWeight: 700, color: T.text, overflow: "hidden",
+                        textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.clientName}</div>
+                      <div style={{ color, fontSize: 10 }}>{c.classTypeName || "—"}</div>
+                      {instr && <div style={{ color: T.textDim, fontSize: 10 }}>👤 {instr.name}</div>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── PLANNING MONTH OVERVIEW (admin) ─────────────────────────────────────────
+function PlanningMonthOverview({ classes, staff, onEdit, onSwitchToDay }) {
+  const [anchorDate, setAnchorDate] = useState(todayStr());
+  const { days, leadingBlanks, monthLabel } = getMonthGrid(anchorDate);
+  const today = todayStr();
+  const DOW = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+        <Btn variant="ghost" size="sm" onClick={() => setAnchorDate(d => addMonths(d, -1))}>← Anterior</Btn>
+        <span style={{ fontSize: 14, fontWeight: 700, color: T.text, flex: 1, textAlign: "center", textTransform: "capitalize" }}>{monthLabel}</span>
+        <Btn variant="ghost" size="sm" onClick={() => setAnchorDate(d => addMonths(d, 1))}>Siguiente →</Btn>
+        <Btn variant="ghost" size="sm" onClick={() => setAnchorDate(todayStr())}>Hoy</Btn>
+      </div>
+      <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, overflow: "hidden" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", background: T.surface,
+          borderBottom: `1px solid ${T.border}` }}>
+          {DOW.map(l => (
+            <div key={l} style={{ padding: "8px 6px", fontSize: 10, fontWeight: 700,
+              color: T.textDim, textAlign: "center", textTransform: "uppercase", letterSpacing: "0.07em" }}>{l}</div>
+          ))}
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)" }}>
+          {Array.from({ length: leadingBlanks }, (_, i) => (
+            <div key={`b${i}`} style={{ minHeight: 90, background: `${T.bg}60`,
+              borderTop: `1px solid ${T.border}`, borderLeft: `1px solid ${T.border}` }} />
+          ))}
+          {days.map(d => {
+            const dayClasses = classes
+              .filter(c => c.classDate === d)
+              .sort((a, b) => (timeToMin(a.horarioInicio) ?? 9999) - (timeToMin(b.horarioInicio) ?? 9999));
+            const isToday = d === today;
+            const isPast = d < today;
+            return (
+              <div key={d} onClick={() => onSwitchToDay(d)}
+                style={{ minHeight: 90, padding: 5, borderTop: `1px solid ${T.border}`,
+                  borderLeft: `1px solid ${T.border}`,
+                  background: isToday ? `${T.accent}08` : "transparent",
+                  opacity: isPast ? 0.6 : 1, cursor: "pointer" }}>
+                <div style={{ width: 22, height: 22, borderRadius: "50%",
+                  background: isToday ? T.accent : "none", display: "flex",
+                  alignItems: "center", justifyContent: "center",
+                  fontSize: 11, fontWeight: isToday ? 700 : 500,
+                  color: isToday ? T.white : T.textDim, marginBottom: 3 }}>
+                  {parseInt(d.split("-")[2])}
+                </div>
+                {dayClasses.slice(0, 3).map(c => {
+                  const color = classColor(c);
+                  return (
+                    <div key={c.id}
+                      onClick={e => { e.stopPropagation(); onEdit && onEdit(c); }}
+                      style={{ background: `${color}18`, borderLeft: `2px solid ${color}`,
+                        borderRadius: 4, padding: "2px 5px", fontSize: 10, fontWeight: 600,
+                        color, marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis",
+                        whiteSpace: "nowrap", cursor: onEdit ? "pointer" : "default" }}>
+                      {c.horarioInicio ? `${fmtTime(c.horarioInicio)} ` : ""}
+                      {c.clientName}
+                    </div>
+                  );
+                })}
+                {dayClasses.length > 3 && (
+                  <div style={{ fontSize: 10, color: T.muted, padding: "1px 4px" }}>+{dayClasses.length - 3} más</div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── EXPORT PRINCIPAL ─────────────────────────────────────────────────────────
+export default function PlanningView({ classes, staff, isAdmin, staffProfile, onUpdate, onEdit, onDelete }) {
+  const [viewType, setViewType] = useState("day"); // "day" | "week" | "month"
+  const [dayTarget, setDayTarget] = useState(null);
+
+  function switchToDay(date) {
+    setDayTarget(date);
+    setViewType("day");
+  }
+
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
         <div style={{ fontSize: 18, fontWeight: 900 }}>▦ Planning</div>
         {isAdmin && (
-          <span style={{ background: `${T.accent}18`, color: T.accent,
-            border: `1px solid ${T.accent}40`, padding: "2px 10px",
-            borderRadius: 20, fontSize: 11, fontWeight: 700 }}>
-            Vista Admin
-          </span>
+          <>
+            <span style={{ background: `${T.accent}18`, color: T.accent,
+              border: `1px solid ${T.accent}40`, padding: "2px 10px",
+              borderRadius: 20, fontSize: 11, fontWeight: 700 }}>
+              Vista Admin
+            </span>
+            <div style={{ display: "flex", gap: 4, marginLeft: "auto" }}>
+              {[["day","Día"],["week","Semana"],["month","Mes"]].map(([v,l]) => (
+                <Btn key={v} variant={viewType===v?"primary":"ghost"} size="sm" onClick={() => setViewType(v)}>{l}</Btn>
+              ))}
+            </div>
+          </>
         )}
       </div>
 
       {isAdmin ? (
-        <PlanningAdminView classes={classes} staff={staff} onUpdate={onUpdate} onEdit={onEdit} onDelete={onDelete} />
+        <>
+          {viewType === "day"   && <PlanningAdminView key={dayTarget} classes={classes} staff={staff} onUpdate={onUpdate} onEdit={onEdit} onDelete={onDelete} initialDate={dayTarget} />}
+          {viewType === "week"  && <PlanningWeekOverview classes={classes} staff={staff} onEdit={onEdit} />}
+          {viewType === "month" && <PlanningMonthOverview classes={classes} staff={staff} onEdit={onEdit} onSwitchToDay={switchToDay} />}
+        </>
       ) : (
         <PlanningInstructorView classes={classes} staffMember={staffProfile} />
       )}

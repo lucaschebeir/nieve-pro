@@ -1650,7 +1650,7 @@ function EstadisticasPage({classes,staff,clients,config}){
 
   const byType=useMemo(()=>{
     const m={};
-    fil.forEach(c=>{const k=c.classTypeName||"Sin tipo";if(!m[k])m[k]={count:0,amount:0};m[k].count++;m[k].amount+=c.amount;});
+    fil.forEach(c=>{const k=c.classTypeName||"Sin tipo";if(!m[k])m[k]={count:0,amount:0,school:0};m[k].count++;m[k].amount+=c.amount;m[k].school+=c.schoolCut;});
     return Object.entries(m).sort((a,b)=>b[1].count-a[1].count);
   },[fil]);
 
@@ -1661,11 +1661,11 @@ function EstadisticasPage({classes,staff,clients,config}){
   },[fil]);
 
   const bySeller=useMemo(()=>{
-    const m={"__escuela__":{name:"Escuela",color:T.green,count:0,amount:0}};
+    const m={"__escuela__":{name:"Escuela",color:T.green,count:0,amount:0,school:0}};
     fil.forEach(c=>{
       const k=c.sellerId||"__escuela__";
-      if(!m[k]){const s=staff.find(x=>x.id===k);m[k]={name:s?.name||"?",color:T.cyan,count:0,amount:0};}
-      m[k].count++;m[k].amount+=c.amount;
+      if(!m[k]){const s=staff.find(x=>x.id===k);m[k]={name:s?.name||"?",color:T.cyan,count:0,amount:0,school:0};}
+      m[k].count++;m[k].amount+=c.amount;m[k].school+=c.schoolCut;
     });
     return Object.entries(m).sort((a,b)=>b[1].count-a[1].count);
   },[fil,staff]);
@@ -1729,9 +1729,13 @@ function EstadisticasPage({classes,staff,clients,config}){
           <SectionTitle>Por Tipo de Clase</SectionTitle>
           {byType.length===0?<Empty text="Sin clases"/>:byType.map(([name,d])=>(
             <div key={name} style={{marginBottom:12}}>
-              <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:2}}>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:1,gap:6}}>
                 <span style={{fontWeight:600}}>{name}</span>
-                <span style={{color:T.textDim}}>{d.count} · <span style={{fontFamily:"monospace",color:T.green}}>{fmt(d.amount)}</span></span>
+                <span style={{color:T.textDim,textAlign:"right"}}>{d.count} clase(s)</span>
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:11,marginBottom:3}}>
+                <span style={{color:T.textDim}}>Facturado: <span style={{fontFamily:"monospace",color:T.text}}>{fmt(d.amount)}</span></span>
+                <span style={{color:T.textDim}}>Escuela: <span style={{fontFamily:"monospace",color:T.gold}}>{fmt(d.school)}</span></span>
               </div>
               <Bar pct={(d.count/maxType)*100} color={T.accent}/>
             </div>
@@ -1743,9 +1747,13 @@ function EstadisticasPage({classes,staff,clients,config}){
           <SectionTitle>Por Vendedor / Origen</SectionTitle>
           {bySeller.length===0?<Empty text="Sin clases"/>:bySeller.map(([k,d])=>(
             <div key={k} style={{marginBottom:12}}>
-              <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:2}}>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:1,gap:6}}>
                 <span style={{fontWeight:600,color:d.color}}>{d.name}</span>
-                <span style={{color:T.textDim}}>{d.count} · <span style={{fontFamily:"monospace",color:T.green}}>{fmt(d.amount)}</span></span>
+                <span style={{color:T.textDim,textAlign:"right"}}>{d.count} clase(s)</span>
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:11,marginBottom:3}}>
+                <span style={{color:T.textDim}}>Facturado: <span style={{fontFamily:"monospace",color:T.text}}>{fmt(d.amount)}</span></span>
+                <span style={{color:T.textDim}}>Escuela: <span style={{fontFamily:"monospace",color:T.gold}}>{fmt(d.school)}</span></span>
               </div>
               <Bar pct={(d.count/maxSeller)*100} color={d.color}/>
             </div>
