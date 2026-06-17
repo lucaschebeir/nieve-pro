@@ -290,7 +290,7 @@ function ModalClassEdit({data,staff,clients,config,onSave,onClose}){
     return "09:30";
   }
 
-  const empty={classDate:today,classTypeId:"",amount:"550",peopleCount:"1",sellerId:"",instructorId:"",clientId:"",clientName:"",notes:"",reservationAmount:"",paidAmount:"",classDone:false,discipline:"ski",horarioInicio:""};
+  const empty={classDate:today,classTypeId:"",classTypeName:"",amount:"550",peopleCount:"1",sellerId:"",instructorId:"",clientId:"",clientName:"",notes:"",reservationAmount:"",paidAmount:"",classDone:false,discipline:"ski",horarioInicio:""};
   const [form,setForm]=useState(data?{...data,amount:String(data.amount),peopleCount:String(data.peopleCount),reservationAmount:String(data.reservationAmount||0),paidAmount:String(data.paidAmount||0),sellerId:data.sellerId||"",instructorId:data.instructorId||"",clientId:data.clientId||"",horarioInicio:autoHorario(data.classTypeId,data.horarioInicio)}:empty);
   const [preview,setPreview]=useState(null);
   const [classDates, setClassDates] = useState([today]);
@@ -317,7 +317,7 @@ function ModalClassEdit({data,staff,clients,config,onSave,onClose}){
     const next={...form,[k]:v};
     if(k==="classTypeId"){
       const r=config.rates.find(x=>x.id===v);
-      if(r) next.amount=String(r.amount);
+      if(r){ next.amount=String(r.amount); next.classTypeName=r.name; }
       if(v===_halfDayId) next.horarioInicio=""; // Half Day: el usuario elige mañana/tarde
       else if(v)         next.horarioInicio="09:30"; // todos los demás: default 09:30
     }
@@ -651,6 +651,15 @@ function AdminApp() {
   const { config, saveConfig } = useConfig();
   const { getBalance, refetch: refetchBalances } = usePendingBalances();
 
+  // Enriquece classTypeName para clases viejas que tienen classTypeId pero no el nombre guardado
+  const enrichedClasses = useMemo(
+    () => classes.map(c => ({
+      ...c,
+      classTypeName: c.classTypeName || config.rates.find(r => r.id === c.classTypeId)?.name || "",
+    })),
+    [classes, config.rates]
+  );
+
   const [page, setPage] = useState("dashboard");
   const [modal, setModal] = useState(null);
   const [toast, setToast] = useState(null);
@@ -786,7 +795,7 @@ function AdminApp() {
 
   // Staff no-admin y no-viewer va directo a su portal personal
   if (!isAdmin && !isViewer) {
-    return <StaffPortalPage staffMember={staffProfile} staff={staff} classes={classes} settlements={settlements} clients={clients} balance={getBalance(staffProfile?.id)} onSignOut={signOut}/>;
+    return <StaffPortalPage staffMember={staffProfile} staff={staff} classes={enrichedClasses} settlements={settlements} clients={clients} balance={getBalance(staffProfile?.id)} onSignOut={signOut}/>;
   }
 
   const NAV = [
@@ -830,14 +839,14 @@ function AdminApp() {
       </div>
       {/* PAGES */}
       <div style={{padding:24,maxWidth:1360,margin:"0 auto"}}>
-        {page==="planning" &&<PlanningView classes={classes} staff={staff} isAdmin={true} onUpdate={isViewer?undefined:updateClassSchedule} onEdit={isViewer?undefined:c=>setModal({type:"class_edit",data:c})} onDelete={isViewer?undefined:async(id)=>{await deleteClass(id);showToast("✓ Clase eliminada")}}/>}
-        {page==="dashboard"&&<DashboardPage staff={staff} classes={classes} settlements={settlements} clients={clients} getBalance={getBalance} onSettle={isViewer?undefined:s=>setModal({type:"settle",data:{staffId:s.id,name:s.name}})} onToggle={isViewer?undefined:handleToggle} onViewStaff={s=>{setSelectedStaffId(s.id);setPage("staff");}}/>}
-        {page==="classes"  &&<ClassesPage classes={classes} staff={staff} clients={clients} onEdit={isViewer?undefined:c=>setModal({type:"class_edit",data:c})} onNew={isViewer?undefined:()=>setModal({type:"class_edit",data:null})} onClientClick={goToClient} onFinanceClick={c=>setModal({type:"class_finance",data:c})} onDelete={isViewer?undefined:async(id)=>{await deleteClass(id);showToast("✓ Clase eliminada")}}/>}
-        {page==="clients"  &&<ClientsPage clients={clients} staff={staff} classes={classes} selectedClientId={selectedClientId} onClearSelected={()=>setSelectedClientId(null)} onEdit={isViewer?undefined:c=>setModal({type:"client_edit",data:c})} onNew={isViewer?undefined:()=>setModal({type:"client_edit",data:null})}/>}
-        {page==="staff"    &&<StaffPage staff={staff} getBalance={getBalance} settlements={settlements} clients={clients} classes={classes} selectedStaffId={selectedStaffId} onClearSelected={()=>setSelectedStaffId(null)} onToggle={isViewer?undefined:handleToggle} onEdit={isViewer?undefined:s=>setModal({type:"staff_edit",data:s})} onNew={isViewer?undefined:()=>setModal({type:"staff_edit",data:null})} onSettle={isViewer?undefined:s=>setModal({type:"settle",data:{staffId:s.id,name:s.name}})} extraCommissions={extraCommissions} onAddExtra={isViewer?undefined:s=>setModal({type:"extra_commission",data:s})} onDeleteExtra={isViewer?undefined:async(id)=>{await deleteExtraCommission(id);showToast("✓ Comisión eliminada");}}/>}
-        {page==="finanzas" &&<FinanzasPage classes={classes} expenses={expenses} staff={staff} onAddExpense={isViewer?undefined:addExpense}/>}
-        {page==="stats"    &&<EstadisticasPage classes={classes} staff={staff} clients={clients} config={config}/>}
-        {page==="search"   &&<SearchPage clients={clients} classes={classes} staff={staff} onViewClient={c=>{setSelectedClientId(c.id);setPage("clients");}}/>}
+        {page==="planning" &&<PlanningView classes={enrichedClasses} staff={staff} isAdmin={true} onUpdate={isViewer?undefined:updateClassSchedule} onEdit={isViewer?undefined:c=>setModal({type:"class_edit",data:c})} onDelete={isViewer?undefined:async(id)=>{await deleteClass(id);showToast("✓ Clase eliminada")}}/>}
+        {page==="dashboard"&&<DashboardPage staff={staff} classes={enrichedClasses} settlements={settlements} clients={clients} getBalance={getBalance} onSettle={isViewer?undefined:s=>setModal({type:"settle",data:{staffId:s.id,name:s.name}})} onToggle={isViewer?undefined:handleToggle} onViewStaff={s=>{setSelectedStaffId(s.id);setPage("staff");}}/>}
+        {page==="classes"  &&<ClassesPage classes={enrichedClasses} staff={staff} clients={clients} onEdit={isViewer?undefined:c=>setModal({type:"class_edit",data:c})} onNew={isViewer?undefined:()=>setModal({type:"class_edit",data:null})} onClientClick={goToClient} onFinanceClick={c=>setModal({type:"class_finance",data:c})} onDelete={isViewer?undefined:async(id)=>{await deleteClass(id);showToast("✓ Clase eliminada")}}/>}
+        {page==="clients"  &&<ClientsPage clients={clients} staff={staff} classes={enrichedClasses} selectedClientId={selectedClientId} onClearSelected={()=>setSelectedClientId(null)} onEdit={isViewer?undefined:c=>setModal({type:"client_edit",data:c})} onNew={isViewer?undefined:()=>setModal({type:"client_edit",data:null})}/>}
+        {page==="staff"    &&<StaffPage staff={staff} getBalance={getBalance} settlements={settlements} clients={clients} classes={enrichedClasses} selectedStaffId={selectedStaffId} onClearSelected={()=>setSelectedStaffId(null)} onToggle={isViewer?undefined:handleToggle} onEdit={isViewer?undefined:s=>setModal({type:"staff_edit",data:s})} onNew={isViewer?undefined:()=>setModal({type:"staff_edit",data:null})} onSettle={isViewer?undefined:s=>setModal({type:"settle",data:{staffId:s.id,name:s.name}})} extraCommissions={extraCommissions} onAddExtra={isViewer?undefined:s=>setModal({type:"extra_commission",data:s})} onDeleteExtra={isViewer?undefined:async(id)=>{await deleteExtraCommission(id);showToast("✓ Comisión eliminada");}}/>}
+        {page==="finanzas" &&<FinanzasPage classes={enrichedClasses} expenses={expenses} staff={staff} onAddExpense={isViewer?undefined:addExpense}/>}
+        {page==="stats"    &&<EstadisticasPage classes={enrichedClasses} staff={staff} clients={clients} config={config}/>}
+        {page==="search"   &&<SearchPage clients={clients} classes={enrichedClasses} staff={staff} onViewClient={c=>{setSelectedClientId(c.id);setPage("clients");}}/>}
         {page==="config"   &&<ConfigPage config={config} onSave={async (c)=>{await saveConfig(c);showToast("✓ Configuración guardada");}} staff={staff} onSaveStaff={handleSaveStaff}/>}
       </div>
       {/* MODALS */}
@@ -1629,6 +1638,7 @@ function EstadisticasPage({classes,staff,clients,config}){
   const [period,setPeriod]=useState("month");
   const [customFrom,setCustomFrom]=useState(daysAgo(30));
   const [customTo,setCustomTo]=useState(today);
+  const [selectedSeller,setSelectedSeller]=useState(null);
 
   const {from,to}=useMemo(()=>{
     if(period==="month"){
@@ -1653,7 +1663,7 @@ function EstadisticasPage({classes,staff,clients,config}){
 
   const byType=useMemo(()=>{
     const m={};
-    fil.forEach(c=>{const k=c.classTypeName||"Sin tipo";if(!m[k])m[k]={count:0,amount:0,school:0};m[k].count++;m[k].amount+=c.amount;m[k].school+=c.schoolCut;});
+    fil.forEach(c=>{const k=c.classTypeName||config.rates.find(r=>r.id===c.classTypeId)?.name||"Sin tipo";if(!m[k])m[k]={count:0,amount:0,school:0};m[k].count++;m[k].amount+=c.amount;m[k].school+=c.schoolCut;});
     return Object.entries(m).sort((a,b)=>b[1].count-a[1].count);
   },[fil]);
 
@@ -1682,6 +1692,28 @@ function EstadisticasPage({classes,staff,clients,config}){
     });
     return Object.entries(m).sort((a,b)=>b[1].count-a[1].count);
   },[fil,staff]);
+
+  const sellerDetail=useMemo(()=>{
+    if(!selectedSeller) return null;
+    const sc=fil.filter(c=>(c.sellerId||"__escuela__")===selectedSeller);
+    const sellerId=selectedSeller==="__escuela__"?null:selectedSeller;
+    const bt={};
+    sc.forEach(c=>{const k=c.classTypeName||"Sin tipo";if(!bt[k])bt[k]={count:0,amount:0,school:0};bt[k].count++;bt[k].amount+=c.amount;bt[k].school+=c.schoolCut;});
+    return {
+      total:sc.length,
+      byType:Object.entries(bt).sort((a,b)=>b[1].count-a[1].count),
+      propias:sc.filter(c=>c.instructorId&&c.instructorId===sellerId).length,
+      conOtro:sc.filter(c=>c.instructorId&&c.instructorId!==sellerId).length,
+      sinInstr:sc.filter(c=>!c.instructorId).length,
+      cobradas:sc.filter(c=>c.paymentStatus==="paid").length,
+      senadas:sc.filter(c=>c.paymentStatus==="partial").length,
+      pendientes:sc.filter(c=>c.paymentStatus==="pending").length,
+      ski:sc.filter(c=>c.discipline!=="snowboard").length,
+      snowboard:sc.filter(c=>c.discipline==="snowboard").length,
+      amount:sc.reduce((a,c)=>a+c.amount,0),
+      school:sc.reduce((a,c)=>a+c.schoolCut,0),
+    };
+  },[selectedSeller,fil]);
 
   const maxType=byType[0]?.[1].count||1;
   const maxSeller=bySeller[0]?.[1].count||1;
@@ -1748,19 +1780,74 @@ function EstadisticasPage({classes,staff,clients,config}){
         {/* Por vendedor */}
         <Card>
           <SectionTitle>Por Vendedor / Origen</SectionTitle>
-          {bySeller.length===0?<Empty text="Sin clases"/>:bySeller.map(([k,d])=>(
-            <div key={k} style={{marginBottom:12}}>
-              <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:1,gap:6}}>
-                <span style={{fontWeight:600,color:d.color}}>{d.name}</span>
-                <span style={{color:T.textDim,textAlign:"right"}}>{d.count} clase(s)</span>
+          {bySeller.length===0?<Empty text="Sin clases"/>:bySeller.map(([k,d])=>{
+            const isOpen=selectedSeller===k;
+            return(
+              <div key={k}>
+                <div
+                  onClick={()=>setSelectedSeller(isOpen?null:k)}
+                  style={{marginBottom:isOpen?0:12,cursor:"pointer",padding:"8px 10px",borderRadius:8,background:isOpen?`${T.border}60`:"transparent",transition:"background .15s"}}
+                >
+                  <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:1,gap:6}}>
+                    <span style={{fontWeight:600,color:d.color}}>{d.name}</span>
+                    <span style={{color:T.textDim,display:"flex",gap:8,alignItems:"center"}}>
+                      <span>{d.count} clase(s)</span>
+                      <span style={{fontSize:10,color:T.muted}}>{isOpen?"▲":"▼"}</span>
+                    </span>
+                  </div>
+                  <div style={{display:"flex",justifyContent:"space-between",fontSize:11,marginBottom:3}}>
+                    <span style={{color:T.textDim}}>Facturado: <span style={{fontFamily:"monospace",color:T.text}}>{fmt(d.amount)}</span></span>
+                    <span style={{color:T.textDim}}>Escuela: <span style={{fontFamily:"monospace",color:T.gold}}>{fmt(d.school)}</span></span>
+                  </div>
+                  <Bar pct={(d.count/maxSeller)*100} color={d.color}/>
+                </div>
+                {isOpen&&sellerDetail&&(
+                  <div style={{margin:"4px 0 12px",padding:"12px 14px",background:T.surface,border:`1px solid ${T.border}`,borderRadius:8,fontSize:12}}>
+                    {/* Por tipo */}
+                    <div style={{marginBottom:10}}>
+                      <div style={{fontSize:10,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:6}}>Tipos de clase</div>
+                      <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                        {sellerDetail.byType.map(([name,dt])=>(
+                          <div key={name} style={{background:`${T.accent}15`,border:`1px solid ${T.accent}30`,borderRadius:6,padding:"3px 8px",fontSize:11}}>
+                            <span style={{fontWeight:600}}>{name}</span>
+                            <span style={{color:T.textDim,marginLeft:5}}>{dt.count} · {fmt(dt.amount)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    {/* Propias vs otro instructor */}
+                    {k!=="__escuela__"&&(
+                      <div style={{marginBottom:10}}>
+                        <div style={{fontSize:10,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:6}}>Instructor</div>
+                        <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+                          {sellerDetail.propias>0&&<span style={{color:T.purple}}>★ {sellerDetail.propias} propia{sellerDetail.propias!==1?"s":""}</span>}
+                          {sellerDetail.conOtro>0&&<span style={{color:T.textDim}}>↗ {sellerDetail.conOtro} con otro instructor</span>}
+                          {sellerDetail.sinInstr>0&&<span style={{color:T.muted}}>— {sellerDetail.sinInstr} sin asignar</span>}
+                        </div>
+                      </div>
+                    )}
+                    {/* Cobro */}
+                    <div style={{marginBottom:10}}>
+                      <div style={{fontSize:10,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:6}}>Estado de cobro</div>
+                      <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+                        {sellerDetail.cobradas>0&&<span style={{color:T.green}}>✓ {sellerDetail.cobradas} cobrada{sellerDetail.cobradas!==1?"s":""}</span>}
+                        {sellerDetail.senadas>0&&<span style={{color:T.orange}}>◑ {sellerDetail.senadas} con seña</span>}
+                        {sellerDetail.pendientes>0&&<span style={{color:T.red}}>○ {sellerDetail.pendientes} pendiente{sellerDetail.pendientes!==1?"s":""}</span>}
+                      </div>
+                    </div>
+                    {/* Disciplina */}
+                    <div>
+                      <div style={{fontSize:10,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:6}}>Disciplina</div>
+                      <div style={{display:"flex",gap:10}}>
+                        {sellerDetail.ski>0&&<span style={{color:T.cyan}}>🎿 {sellerDetail.ski} esquí</span>}
+                        {sellerDetail.snowboard>0&&<span style={{color:T.purple}}>🏂 {sellerDetail.snowboard} snowboard</span>}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
-              <div style={{display:"flex",justifyContent:"space-between",fontSize:11,marginBottom:3}}>
-                <span style={{color:T.textDim}}>Facturado: <span style={{fontFamily:"monospace",color:T.text}}>{fmt(d.amount)}</span></span>
-                <span style={{color:T.textDim}}>Escuela: <span style={{fontFamily:"monospace",color:T.gold}}>{fmt(d.school)}</span></span>
-              </div>
-              <Bar pct={(d.count/maxSeller)*100} color={d.color}/>
-            </div>
-          ))}
+            );
+          })}
         </Card>
       </div>
 
