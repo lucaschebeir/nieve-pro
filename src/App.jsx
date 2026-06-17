@@ -360,7 +360,7 @@ function ModalClassEdit({data,staff,clients,config,onSave,onClose}){
             <Inp label="Tipo" value={form.classTypeId} onChange={v=>set("classTypeId",v)} options={config.rates.map(r=>({value:r.id,label:`${r.name} — ${fmt(r.amount)}`}))}/>
           </div>
           {/* ── Horario según tipo de clase ── */}
-          {form.classTypeId===_fullDayId||form.classTypeId===_miniDayId ? (
+          {form.classTypeId===_fullDayId ? (
             <div style={{background:`${T.accent}10`,border:`1px solid ${T.accent}30`,borderRadius:8,padding:"8px 12px",fontSize:12,color:T.textDim}}>
               🕘 Horario fijo: <strong style={{color:T.text}}>09:30</strong>
             </div>

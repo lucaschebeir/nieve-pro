@@ -20,8 +20,8 @@ const T = {
 
 // ─── CONSTANTES DE HORARIO ────────────────────────────────────────────────────
 const DAY_START_MIN = 9 * 60 + 30;   // 9:30
-const DAY_END_MIN   = 16 * 60 + 30;  // 16:30
-const DAY_SPAN_MIN  = DAY_END_MIN - DAY_START_MIN; // 420 min
+const DAY_END_MIN   = 17 * 60;        // 17:00
+const DAY_SPAN_MIN  = DAY_END_MIN - DAY_START_MIN; // 450 min
 
 // Duración en minutos por tipo de clase (lookup por ID)
 const CLASS_DURATIONS = {
@@ -39,7 +39,6 @@ const DURATION_BY_NAME = {
 // Horarios fijos para tipos que no tienen flexibilidad
 const FIXED_START = {
   "b31212c9-f92d-4536-abe9-52a233985a79": "09:30", // Full Day
-  "e498e156-1668-4b5d-b0f8-fec47def2948": "09:30", // Mini Day
 };
 
 // Half Day IDs para detectarlo
@@ -309,7 +308,7 @@ function TimelineDropArea({ instrId, date, children }) {
 // ─── TIME AXIS HEADER ─────────────────────────────────────────────────────────
 function TimeAxisHeader({ pxPerMin }) {
   const slots = [];
-  for (let min = DAY_START_MIN; min <= DAY_END_MIN; min += 60) {
+  for (let min = Math.ceil(DAY_START_MIN / 60) * 60; min <= DAY_END_MIN; min += 60) {
     slots.push(minToTime(min));
   }
   return (
