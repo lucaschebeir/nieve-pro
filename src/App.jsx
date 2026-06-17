@@ -1005,15 +1005,10 @@ function ClientsPage({clients,staff,classes,selectedClientId,onClearSelected,onE
   const [viewMode,setViewMode]=useState("grid"); // "grid" | "by_seller"
   const [collapsed,setCollapsed]=useState({}); // sellerId → bool
   const [viewClient,setViewClient]=useState(null);
-  const target=selectedClientId?clients.find(c=>c.id===selectedClientId):null;
-  if(target||viewClient){
-    const cl=viewClient||target;
-    const cls=classes.filter(c=>c.clientId===cl.id||c.clientName?.toLowerCase()===cl.name?.toLowerCase());
-    return <Card><ClientDetailCard client={cl} allClasses={cls} staff={staff} onBack={()=>{setViewClient(null);onClearSelected();}} backLabel="← Volver a Clientes" isAdmin/><div style={{marginTop:16}}><Btn variant="ghost" size="sm" onClick={()=>onEdit(cl)}>✎ Editar</Btn></div></Card>;
-  }
-  const filtered=clients.filter(c=>!search||[c.name,c.phone,c.email,c.notes].some(f=>f?.toLowerCase().includes(search.toLowerCase())));
 
-  // Agrupado por vendedor
+  // Hooks SIEMPRE antes de cualquier return condicional
+  const filtered=useMemo(()=>clients.filter(c=>!search||[c.name,c.phone,c.email,c.notes].some(f=>f?.toLowerCase().includes(search.toLowerCase()))),[clients,search]);
+
   const sellerGroups=useMemo(()=>{
     const sellers=staff.filter(s=>s.role==="seller"||s.role==="both");
     const groups=[
@@ -1028,6 +1023,14 @@ function ClientsPage({clients,staff,classes,selectedClientId,onClearSelected,onE
   },[filtered,staff]);
 
   function toggleGroup(key){setCollapsed(p=>({...p,[key]:!p[key]}));}
+
+  // Early return DESPUÉS de todos los hooks
+  const target=selectedClientId?clients.find(c=>c.id===selectedClientId):null;
+  if(target||viewClient){
+    const cl=viewClient||target;
+    const cls=classes.filter(c=>c.clientId===cl.id||c.clientName?.toLowerCase()===cl.name?.toLowerCase());
+    return <Card><ClientDetailCard client={cl} allClasses={cls} staff={staff} onBack={()=>{setViewClient(null);onClearSelected();}} backLabel="← Volver a Clientes" isAdmin/><div style={{marginTop:16}}>{onEdit&&<Btn variant="ghost" size="sm" onClick={()=>onEdit(cl)}>✎ Editar</Btn>}</div></Card>;
+  }
 
   return(
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
