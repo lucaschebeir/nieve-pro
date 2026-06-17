@@ -226,7 +226,7 @@ function ClientDetailCard({client,allClasses,staff,onBack,backLabel,isAdmin=true
             {client.phone&&<span style={{fontSize:12,color:T.textDim}}>📞 {client.phone}</span>}
             {client.email&&<span style={{fontSize:12,color:T.textDim}}>✉ {client.email}</span>}
           </div>
-          <div style={{marginTop:6}}>{seller?<Badge text={`Vendedor: ${seller.name}`} color={T.cyan}/>:<Badge text="Sin vendedor" color={T.muted}/>}</div>
+          <div style={{marginTop:6}}>{seller?<Badge text={`Vendedor: ${seller.name}`} color={T.cyan}/>:<Badge text="Escuela" color={T.green}/>}</div>
         </div>
       </div>
       {client.notes&&<div style={{background:T.surface,borderRadius:8,padding:"8px 12px",fontSize:12,color:T.textDim,lineHeight:1.6}}>📝 {client.notes}</div>}
@@ -704,7 +704,7 @@ function AdminApp() {
       Pagado: c.paidAmount, Saldo: c.amount - c.paidAmount,
       "Est.Pago": PAY_STATUS[c.paymentStatus]?.label,
       "Est.Instructor": INSTR_STATUS[c.instructorStatus]?.label,
-      Vendedor: staff.find(s=>s.id===c.sellerId)?.name||"",
+      Vendedor: staff.find(s=>s.id===c.sellerId)?.name||"Escuela",
       Instructor: staff.find(s=>s.id===c.instructorId)?.name||"",
       Escenario: SCENARIO_LABELS[c.scenario],
       "Comisión Vendedor": c.sellerCommission, "Honorario Instructor": c.instructorEarning,
@@ -715,7 +715,7 @@ function AdminApp() {
       const vendedor = staff.find(s=>s.id===c.sellerId);
       const cls = classes.filter(x=>x.clientId===c.id||x.clientName?.toLowerCase()===c.name?.toLowerCase());
       return { Nombre: c.name, Teléfono: c.phone||"", Email: c.email||"",
-        Vendedor: vendedor?.name||"Sin asignar", "Total Clases": cls.length,
+        Vendedor: vendedor?.name||"Escuela", "Total Clases": cls.length,
         "Total Gastado": cls.reduce((a,x)=>a+x.amount,0),
         "Total Cobrado": cls.reduce((a,x)=>a+x.paidAmount,0),
         "Saldo Pendiente": cls.reduce((a,x)=>a+(x.amount-x.paidAmount),0), Notas: c.notes||"" };
@@ -796,6 +796,7 @@ function AdminApp() {
     {id:"clients",  label:"Clientes", icon:"♟"},
     {id:"staff",    label:"Staff",    icon:"⚇"},
     {id:"finanzas", label:"Finanzas", icon:"$"},
+    {id:"stats",    label:"Estadísticas",icon:"▲"},
     {id:"search",   label:"Buscador", icon:"⌕"},
     {id:"config",   label:"Config",   icon:"⚙"},
   ];
@@ -835,6 +836,7 @@ function AdminApp() {
         {page==="clients"  &&<ClientsPage clients={clients} staff={staff} classes={classes} selectedClientId={selectedClientId} onClearSelected={()=>setSelectedClientId(null)} onEdit={isViewer?undefined:c=>setModal({type:"client_edit",data:c})} onNew={isViewer?undefined:()=>setModal({type:"client_edit",data:null})}/>}
         {page==="staff"    &&<StaffPage staff={staff} getBalance={getBalance} settlements={settlements} clients={clients} classes={classes} selectedStaffId={selectedStaffId} onClearSelected={()=>setSelectedStaffId(null)} onToggle={isViewer?undefined:handleToggle} onEdit={isViewer?undefined:s=>setModal({type:"staff_edit",data:s})} onNew={isViewer?undefined:()=>setModal({type:"staff_edit",data:null})} onSettle={isViewer?undefined:s=>setModal({type:"settle",data:{staffId:s.id,name:s.name}})} extraCommissions={extraCommissions} onAddExtra={isViewer?undefined:s=>setModal({type:"extra_commission",data:s})} onDeleteExtra={isViewer?undefined:async(id)=>{await deleteExtraCommission(id);showToast("✓ Comisión eliminada");}}/>}
         {page==="finanzas" &&<FinanzasPage classes={classes} expenses={expenses} staff={staff} onAddExpense={isViewer?undefined:addExpense}/>}
+        {page==="stats"    &&<EstadisticasPage classes={classes} staff={staff} clients={clients} config={config}/>}
         {page==="search"   &&<SearchPage clients={clients} classes={classes} staff={staff} onViewClient={c=>{setSelectedClientId(c.id);setPage("clients");}}/>}
         {page==="config"   &&<ConfigPage config={config} onSave={async (c)=>{await saveConfig(c);showToast("✓ Configuración guardada");}} staff={staff} onSaveStaff={handleSaveStaff}/>}
       </div>
@@ -1000,6 +1002,8 @@ function ClassesPage({classes,staff,clients,onEdit,onNew,onClientClick,onFinance
 
 function ClientsPage({clients,staff,classes,selectedClientId,onClearSelected,onEdit,onNew}){
   const [search,setSearch]=useState("");
+  const [viewMode,setViewMode]=useState("grid"); // "grid" | "by_seller"
+  const [collapsed,setCollapsed]=useState({}); // sellerId → bool
   const [viewClient,setViewClient]=useState(null);
   const target=selectedClientId?clients.find(c=>c.id===selectedClientId):null;
   if(target||viewClient){
@@ -1008,27 +1012,101 @@ function ClientsPage({clients,staff,classes,selectedClientId,onClearSelected,onE
     return <Card><ClientDetailCard client={cl} allClasses={cls} staff={staff} onBack={()=>{setViewClient(null);onClearSelected();}} backLabel="← Volver a Clientes" isAdmin/><div style={{marginTop:16}}><Btn variant="ghost" size="sm" onClick={()=>onEdit(cl)}>✎ Editar</Btn></div></Card>;
   }
   const filtered=clients.filter(c=>!search||[c.name,c.phone,c.email,c.notes].some(f=>f?.toLowerCase().includes(search.toLowerCase())));
+
+  // Agrupado por vendedor
+  const sellerGroups=useMemo(()=>{
+    const sellers=staff.filter(s=>s.role==="seller"||s.role==="both");
+    const groups=[
+      {key:"__escuela__",name:"Escuela",color:T.green,clients:[]},
+      ...sellers.map(s=>({key:s.id,name:s.name,color:T.cyan,clients:[]})),
+    ];
+    filtered.forEach(c=>{
+      const g=groups.find(x=>x.key===(c.sellerId||"__escuela__"))||groups[0];
+      g.clients.push(c);
+    });
+    return groups.filter(g=>g.clients.length>0);
+  },[filtered,staff]);
+
+  function toggleGroup(key){setCollapsed(p=>({...p,[key]:!p[key]}));}
+
   return(
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
-      <div style={{display:"flex",gap:10,alignItems:"center"}}>
-        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Buscar..." style={{background:T.surface,border:`1px solid ${T.border}`,color:T.text,borderRadius:8,padding:"8px 14px",fontSize:13,flex:1,outline:"none",fontFamily:"inherit"}}/>
-        <Btn variant="primary" size="sm" onClick={onNew}>＋ Nuevo</Btn>
+      <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Buscar..." style={{background:T.surface,border:`1px solid ${T.border}`,color:T.text,borderRadius:8,padding:"8px 14px",fontSize:13,flex:1,minWidth:160,outline:"none",fontFamily:"inherit"}}/>
+        <div style={{display:"flex",gap:4}}>
+          <Btn variant={viewMode==="grid"?"primary":"ghost"} size="sm" onClick={()=>setViewMode("grid")}>⊞ Todos</Btn>
+          <Btn variant={viewMode==="by_seller"?"primary":"ghost"} size="sm" onClick={()=>setViewMode("by_seller")}>⚇ Por Vendedor</Btn>
+        </div>
+        {onNew&&<Btn variant="primary" size="sm" onClick={onNew}>＋ Nuevo</Btn>}
         <span style={{fontSize:12,color:T.textDim}}><b style={{color:T.text}}>{filtered.length}</b> clientes</span>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:14}}>
-        {filtered.map(c=>{
-          const seller=staff.find(s=>s.id===c.sellerId);
-          const cls=classes.filter(x=>x.clientId===c.id||x.clientName?.toLowerCase()===c.name?.toLowerCase());
-          return(
-            <Card key={c.id}>
-              <div style={{display:"flex",gap:12,marginBottom:12}}><Av name={c.name} size={44} color={T.accent}/><div style={{flex:1}}><div style={{fontWeight:800,fontSize:14}}>{c.name}</div>{c.phone&&<div style={{fontSize:12,color:T.textDim,marginTop:2}}>📞 {c.phone}</div>}{c.email&&<div style={{fontSize:12,color:T.textDim}}>✉ {c.email}</div>}</div></div>
-              {c.notes&&<div style={{fontSize:12,color:T.textDim,background:T.surface,borderRadius:6,padding:"6px 10px",marginBottom:12,lineHeight:1.5,maxHeight:50,overflow:"hidden"}}>{c.notes}</div>}
-              <div style={{display:"flex",gap:6,marginBottom:12,flexWrap:"wrap"}}>{seller?<Badge text={seller.name} color={T.cyan}/>:<Badge text="Sin vendedor" color={T.muted}/>}<Badge text={`${cls.length} clase(s)`} color={T.purple}/><Badge text={fmt(cls.reduce((a,c)=>a+c.amount,0))} color={T.green}/></div>
-              <div style={{display:"flex",gap:8}}><Btn variant="ghost" size="sm" onClick={()=>setViewClient(c)} style={{flex:1}}>Ver Ficha</Btn><Btn variant="ghost" size="sm" onClick={()=>onEdit(c)}>✎</Btn></div>
-            </Card>
-          );
-        })}
-      </div>
+
+      {viewMode==="grid"&&(
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:14}}>
+          {filtered.map(c=>{
+            const seller=staff.find(s=>s.id===c.sellerId);
+            const cls=classes.filter(x=>x.clientId===c.id||x.clientName?.toLowerCase()===c.name?.toLowerCase());
+            return(
+              <Card key={c.id}>
+                <div style={{display:"flex",gap:12,marginBottom:12}}><Av name={c.name} size={44} color={T.accent}/><div style={{flex:1}}><div style={{fontWeight:800,fontSize:14}}>{c.name}</div>{c.phone&&<div style={{fontSize:12,color:T.textDim,marginTop:2}}>📞 {c.phone}</div>}{c.email&&<div style={{fontSize:12,color:T.textDim}}>✉ {c.email}</div>}</div></div>
+                {c.notes&&<div style={{fontSize:12,color:T.textDim,background:T.surface,borderRadius:6,padding:"6px 10px",marginBottom:12,lineHeight:1.5,maxHeight:50,overflow:"hidden"}}>{c.notes}</div>}
+                <div style={{display:"flex",gap:6,marginBottom:12,flexWrap:"wrap"}}>{seller?<Badge text={seller.name} color={T.cyan}/>:<Badge text="Escuela" color={T.green}/>}<Badge text={`${cls.length} clase(s)`} color={T.purple}/><Badge text={fmt(cls.reduce((a,c)=>a+c.amount,0))} color={T.green}/></div>
+                <div style={{display:"flex",gap:8}}><Btn variant="ghost" size="sm" onClick={()=>setViewClient(c)} style={{flex:1}}>Ver Ficha</Btn>{onEdit&&<Btn variant="ghost" size="sm" onClick={()=>onEdit(c)}>✎</Btn>}</div>
+              </Card>
+            );
+          })}
+          {filtered.length===0&&<div style={{gridColumn:"1/-1"}}><Empty text="Sin clientes"/></div>}
+        </div>
+      )}
+
+      {viewMode==="by_seller"&&(
+        <div style={{display:"flex",flexDirection:"column",gap:12}}>
+          {sellerGroups.length===0&&<Empty text="Sin clientes"/>}
+          {sellerGroups.map(g=>{
+            const open=!collapsed[g.key];
+            const total=g.clients.reduce((a,c)=>a+classes.filter(x=>x.clientId===c.id||x.clientName?.toLowerCase()===c.name?.toLowerCase()).reduce((b,x)=>b+x.amount,0),0);
+            return(
+              <div key={g.key}>
+                <button onClick={()=>toggleGroup(g.key)} style={{width:"100%",background:T.card,border:`1px solid ${T.border}`,borderRadius:10,padding:"10px 16px",display:"flex",alignItems:"center",gap:12,cursor:"pointer",color:T.text,fontFamily:"inherit",marginBottom:open?8:0}}>
+                  <Av name={g.name[0]==="E"&&g.key==="__escuela__"?"Esc":g.name} size={32} color={g.color}/>
+                  <div style={{flex:1,textAlign:"left"}}>
+                    <div style={{fontWeight:800,fontSize:14,color:g.color}}>{g.name}</div>
+                    <div style={{fontSize:11,color:T.textDim}}>{g.clients.length} cliente(s) · {fmt(total)}</div>
+                  </div>
+                  <span style={{color:T.muted,fontSize:16}}>{open?"▲":"▼"}</span>
+                </button>
+                {open&&(
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:10,paddingLeft:8,borderLeft:`2px solid ${g.color}30`}}>
+                    {g.clients.map(c=>{
+                      const cls=classes.filter(x=>x.clientId===c.id||x.clientName?.toLowerCase()===c.name?.toLowerCase());
+                      return(
+                        <Card key={c.id} style={{padding:"12px 14px"}}>
+                          <div style={{display:"flex",gap:10,marginBottom:8}}>
+                            <Av name={c.name} size={36} color={T.accent}/>
+                            <div style={{flex:1}}>
+                              <div style={{fontWeight:800,fontSize:13}}>{c.name}</div>
+                              {c.phone&&<div style={{fontSize:11,color:T.textDim}}>📞 {c.phone}</div>}
+                            </div>
+                          </div>
+                          {c.notes&&<div style={{fontSize:11,color:T.textDim,background:T.surface,borderRadius:5,padding:"4px 8px",marginBottom:8,maxHeight:36,overflow:"hidden"}}>{c.notes}</div>}
+                          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
+                            <Badge text={`${cls.length} clase(s)`} color={T.purple} small/>
+                            <Badge text={fmt(cls.reduce((a,c)=>a+c.amount,0))} color={T.green} small/>
+                          </div>
+                          <div style={{display:"flex",gap:6}}>
+                            <Btn variant="ghost" size="sm" onClick={()=>setViewClient(c)} style={{flex:1}}>Ver Ficha</Btn>
+                            {onEdit&&<Btn variant="ghost" size="sm" onClick={()=>onEdit(c)}>✎</Btn>}
+                          </div>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -1250,7 +1328,7 @@ function SearchPage({clients,classes,staff,onViewClient}){
                 </div>
                 <div style={{display:"flex",gap:8,marginTop:10,flexWrap:"wrap"}}>
                   <div style={{background:`${T.accent}12`,border:`1px solid ${T.accent}25`,borderRadius:8,padding:"6px 12px",fontSize:12}}>
-                    Vendedor: <strong style={{color:T.cyan}}>{seller?seller.name:"Sin asignar"}</strong>
+                    Vendedor: <strong style={{color:seller?T.cyan:T.green}}>{seller?seller.name:"Escuela"}</strong>
                     {seller&&<span style={{color:T.textDim}}> · {seller.commissionPct}%</span>}
                   </div>
                   {cls.length>0&&<div style={{background:`${T.green}10`,border:`1px solid ${T.green}25`,borderRadius:8,padding:"6px 12px",fontSize:12}}>{cls.length} clase(s) · <strong style={{color:T.green}}>{fmt(cls.reduce((a,c)=>a+c.amount,0))}</strong></div>}
@@ -1539,6 +1617,160 @@ function StaffPortalPage({ staffMember, staff, classes, settlements, clients, ba
           <PlanningInstructorView classes={classes} staffMember={staffMember} />
         )}
       </div>
+    </div>
+  );
+}
+
+// ─── ESTADÍSTICAS ─────────────────────────────────────────────────────────────
+function EstadisticasPage({classes,staff,clients,config}){
+  const [period,setPeriod]=useState("month");
+  const [customFrom,setCustomFrom]=useState(daysAgo(30));
+  const [customTo,setCustomTo]=useState(today);
+
+  const {from,to}=useMemo(()=>{
+    if(period==="month"){
+      const n=new Date(),y=n.getFullYear(),m=String(n.getMonth()+1).padStart(2,"0");
+      return {from:`${y}-${m}-01`,to:today};
+    }
+    if(period==="last_month"){
+      const n=new Date();
+      const f=new Date(n.getFullYear(),n.getMonth()-1,1);
+      const l=new Date(n.getFullYear(),n.getMonth(),0);
+      return {from:f.toISOString().split("T")[0],to:l.toISOString().split("T")[0]};
+    }
+    if(period==="custom") return {from:customFrom,to:customTo};
+    return {from:"2000-01-01",to:"2099-12-31"};
+  },[period,customFrom,customTo]);
+
+  const fil=useMemo(()=>classes.filter(c=>c.classDate>=from&&c.classDate<=to),[classes,from,to]);
+
+  const totalAmount=fil.reduce((a,c)=>a+c.amount,0);
+  const totalCobrado=fil.reduce((a,c)=>a+c.paidAmount,0);
+  const schoolNet=fil.reduce((a,c)=>a+c.schoolCut,0);
+
+  const byType=useMemo(()=>{
+    const m={};
+    fil.forEach(c=>{const k=c.classTypeName||"Sin tipo";if(!m[k])m[k]={count:0,amount:0};m[k].count++;m[k].amount+=c.amount;});
+    return Object.entries(m).sort((a,b)=>b[1].count-a[1].count);
+  },[fil]);
+
+  const byDisc=useMemo(()=>{
+    const m={ski:{label:"Esquí",count:0,amount:0},snowboard:{label:"Snowboard",count:0,amount:0}};
+    fil.forEach(c=>{const k=c.discipline==="snowboard"?"snowboard":"ski";m[k].count++;m[k].amount+=c.amount;});
+    return Object.entries(m);
+  },[fil]);
+
+  const bySeller=useMemo(()=>{
+    const m={"__escuela__":{name:"Escuela",color:T.green,count:0,amount:0}};
+    fil.forEach(c=>{
+      const k=c.sellerId||"__escuela__";
+      if(!m[k]){const s=staff.find(x=>x.id===k);m[k]={name:s?.name||"?",color:T.cyan,count:0,amount:0};}
+      m[k].count++;m[k].amount+=c.amount;
+    });
+    return Object.entries(m).sort((a,b)=>b[1].count-a[1].count);
+  },[fil,staff]);
+
+  const byInstr=useMemo(()=>{
+    const m={"__none__":{name:"Sin asignar",count:0,amount:0,earning:0}};
+    fil.forEach(c=>{
+      const k=c.instructorId||"__none__";
+      if(!m[k]){const s=staff.find(x=>x.id===k);m[k]={name:s?.name||"?",count:0,amount:0,earning:0};}
+      m[k].count++;m[k].amount+=c.amount;m[k].earning+=(c.instructorEarning||0);
+    });
+    return Object.entries(m).sort((a,b)=>b[1].count-a[1].count);
+  },[fil,staff]);
+
+  const maxType=byType[0]?.[1].count||1;
+  const maxSeller=bySeller[0]?.[1].count||1;
+
+  function Bar({pct,color}){
+    return <div style={{height:5,background:T.border,borderRadius:3,overflow:"hidden",marginTop:4}}><div style={{width:`${pct}%`,height:"100%",background:color,borderRadius:3,transition:"width .3s"}}/></div>;
+  }
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:20}}>
+      {/* Filtro */}
+      <Card style={{padding:"12px 18px"}}>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+          <span style={{fontSize:11,color:T.muted,fontWeight:700}}>PERÍODO:</span>
+          {[["month","Este mes"],["last_month","Mes anterior"],["all","Todo"],["custom","Personalizado"]].map(([v,l])=>(
+            <Btn key={v} variant={period===v?"primary":"ghost"} size="sm" onClick={()=>setPeriod(v)}>{l}</Btn>
+          ))}
+          {period==="custom"&&<>
+            <input type="date" value={customFrom} onChange={e=>setCustomFrom(e.target.value)} style={{background:T.surface,border:`1px solid ${T.border}`,color:T.text,borderRadius:7,padding:"5px 10px",fontSize:12,outline:"none",fontFamily:"inherit"}}/>
+            <span style={{color:T.muted}}>—</span>
+            <input type="date" value={customTo} onChange={e=>setCustomTo(e.target.value)} style={{background:T.surface,border:`1px solid ${T.border}`,color:T.text,borderRadius:7,padding:"5px 10px",fontSize:12,outline:"none",fontFamily:"inherit"}}/>
+          </>}
+          <span style={{marginLeft:"auto",fontSize:12,color:T.textDim}}><b style={{color:T.text}}>{fil.length}</b> clases en el período</span>
+        </div>
+      </Card>
+
+      {/* Resumen */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:12}}>
+        <Card style={{padding:"12px 16px"}}><Stat label="Total Clases" value={fil.length} color={T.text} icon="▤"/></Card>
+        <Card style={{padding:"12px 16px"}}><Stat label="Facturado" value={fmt(totalAmount)} color={T.text}/></Card>
+        <Card style={{padding:"12px 16px"}}><Stat label="Cobrado" value={fmt(totalCobrado)} color={T.green}/></Card>
+        <Card style={{padding:"12px 16px"}}><Stat label="Pendiente" value={fmt(totalAmount-totalCobrado)} color={totalAmount-totalCobrado>0?T.orange:T.green}/></Card>
+        <Card style={{padding:"12px 16px"}}><Stat label="Neto Escuela" value={fmt(schoolNet)} color={T.gold} icon="★"/></Card>
+      </div>
+
+      {/* Disciplinas */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+        {byDisc.map(([k,d])=>(
+          <Card key={k} style={{padding:"12px 16px",background:k==="snowboard"?`${T.purple}0a`:undefined,borderColor:k==="snowboard"?`${T.purple}30`:undefined}}>
+            <Stat label={d.label} value={d.count} color={k==="snowboard"?T.purple:T.cyan} sub={`${fmt(d.amount)} facturado`} icon={k==="snowboard"?"🏂":"🎿"}/>
+          </Card>
+        ))}
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20,alignItems:"start"}}>
+        {/* Por tipo */}
+        <Card>
+          <SectionTitle>Por Tipo de Clase</SectionTitle>
+          {byType.length===0?<Empty text="Sin clases"/>:byType.map(([name,d])=>(
+            <div key={name} style={{marginBottom:12}}>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:2}}>
+                <span style={{fontWeight:600}}>{name}</span>
+                <span style={{color:T.textDim}}>{d.count} · <span style={{fontFamily:"monospace",color:T.green}}>{fmt(d.amount)}</span></span>
+              </div>
+              <Bar pct={(d.count/maxType)*100} color={T.accent}/>
+            </div>
+          ))}
+        </Card>
+
+        {/* Por vendedor */}
+        <Card>
+          <SectionTitle>Por Vendedor / Origen</SectionTitle>
+          {bySeller.length===0?<Empty text="Sin clases"/>:bySeller.map(([k,d])=>(
+            <div key={k} style={{marginBottom:12}}>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:2}}>
+                <span style={{fontWeight:600,color:d.color}}>{d.name}</span>
+                <span style={{color:T.textDim}}>{d.count} · <span style={{fontFamily:"monospace",color:T.green}}>{fmt(d.amount)}</span></span>
+              </div>
+              <Bar pct={(d.count/maxSeller)*100} color={d.color}/>
+            </div>
+          ))}
+        </Card>
+      </div>
+
+      {/* Por instructor */}
+      <Card style={{padding:0,overflow:"hidden"}}>
+        <div style={{padding:"14px 16px",borderBottom:`1px solid ${T.border}`}}><SectionTitle>Por Instructor</SectionTitle></div>
+        <table style={{width:"100%",borderCollapse:"collapse"}}>
+          <thead><tr><TH>Instructor</TH><TH>Clases</TH><TH>Facturado</TH><TH>Honorarios</TH></tr></thead>
+          <tbody>
+            {byInstr.map(([k,d])=>(
+              <tr key={k}>
+                <TD style={{fontWeight:600,color:k==="__none__"?T.muted:T.text}}>{k==="__none__"?"—":d.name}</TD>
+                <TD style={{fontFamily:"monospace"}}>{d.count}</TD>
+                <TD style={{fontFamily:"monospace",color:T.green}}>{fmt(d.amount)}</TD>
+                <TD style={{fontFamily:"monospace",color:T.purple}}>{fmt(d.earning)}</TD>
+              </tr>
+            ))}
+            {byInstr.length===0&&<tr><td colSpan={4}><Empty text="Sin clases"/></td></tr>}
+          </tbody>
+        </table>
+      </Card>
     </div>
   );
 }
