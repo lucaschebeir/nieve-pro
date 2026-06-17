@@ -47,6 +47,7 @@ const SCENARIO_COLORS = {
 
 const today   = new Date().toISOString().split("T")[0];
 const daysAgo = n => new Date(Date.now()-n*86400000).toISOString().split("T")[0];
+const seasonRange = (offset=0) => { const y=new Date().getFullYear()+offset; return {from:`${y}-05-01`,to:`${y}-10-31`}; };
 
 const fmt     = n => "$"+Number(n||0).toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2});
 const fmtDate = d => { if(!d) return ""; return new Date(d+"T12:00:00").toLocaleDateString("es-AR",{day:"2-digit",month:"short",year:"numeric"}); };
@@ -934,14 +935,24 @@ function ClassesPage({classes,staff,clients,onEdit,onNew,onClientClick,onFinance
   const [instrF,setInstrF]=useState("all");
   const [settF,setSettF]=useState("pending");
   const [search,setSearch]=useState("");
+  const [season,setSeason]=useState("current");
+  const [customFrom,setCustomFrom]=useState(seasonRange().from);
+  const [customTo,setCustomTo]=useState(seasonRange().to);
+  const {sfrom,sto}=useMemo(()=>{
+    if(season==="current") return {sfrom:seasonRange().from,sto:seasonRange().to};
+    if(season==="last")    return {sfrom:seasonRange(-1).from,sto:seasonRange(-1).to};
+    if(season==="custom")  return {sfrom:customFrom,sto:customTo};
+    return {sfrom:"2000-01-01",sto:"2099-12-31"};
+  },[season,customFrom,customTo]);
   const filtered=useMemo(()=>classes.filter(c=>{
+    if(c.classDate<sfrom||c.classDate>sto)return false;
     if(payF!=="all"&&c.paymentStatus!==payF)return false;
     if(instrF!=="all"&&c.instructorStatus!==instrF)return false;
     if(settF==="pending"&&c.isSettled)return false;
     if(settF==="settled"&&!c.isSettled)return false;
     if(search&&!c.clientName?.toLowerCase().includes(search.toLowerCase())&&!c.notes?.toLowerCase().includes(search.toLowerCase()))return false;
     return true;
-  }),[classes,payF,instrF,settF,search]);
+  }),[classes,sfrom,sto,payF,instrF,settF,search]);
   const totalM=filtered.reduce((a,c)=>{
   if(c.scenario==="own_class"&&c.schoolCut>0) return a+c.schoolCut;
   return a+c.amount;
@@ -959,6 +970,17 @@ function ClassesPage({classes,staff,clients,onEdit,onNew,onClientClick,onFinance
         <Card style={{padding:"12px 16px"}}><Stat label="Saldo a Cobrar" value={fmt(totalM-totalC)} color={totalM-totalC>0?T.orange:T.green}/></Card>
       </div>
       <Card style={{padding:"14px 18px"}}>
+        <div style={{display:"flex",flexWrap:"wrap",gap:8,alignItems:"center",marginBottom:10,paddingBottom:10,borderBottom:`1px solid ${T.border}`}}>
+          <span style={{fontSize:10,color:T.muted,fontWeight:700}}>TEMPORADA:</span>
+          {[["current","Esta temporada"],["last","Temporada anterior"],["all","Todas"],["custom","Personalizado"]].map(([v,l])=>(
+            <Btn key={v} variant={season===v?"primary":"ghost"} size="sm" onClick={()=>setSeason(v)}>{l}</Btn>
+          ))}
+          {season==="custom"&&<>
+            <input type="date" value={customFrom} onChange={e=>setCustomFrom(e.target.value)} style={{background:T.surface,border:`1px solid ${T.border}`,color:T.text,borderRadius:7,padding:"5px 10px",fontSize:12,outline:"none",fontFamily:"inherit"}}/>
+            <span style={{color:T.muted}}>—</span>
+            <input type="date" value={customTo} onChange={e=>setCustomTo(e.target.value)} style={{background:T.surface,border:`1px solid ${T.border}`,color:T.text,borderRadius:7,padding:"5px 10px",fontSize:12,outline:"none",fontFamily:"inherit"}}/>
+          </>}
+        </div>
         <div style={{display:"flex",flexWrap:"wrap",gap:8,alignItems:"center"}}>
           <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Cliente o notas..." style={{background:T.surface,border:`1px solid ${T.border}`,color:T.text,borderRadius:7,padding:"7px 12px",fontSize:13,minWidth:180,outline:"none",fontFamily:"inherit"}}/>
           <div style={{display:"flex",gap:4}}><span style={{fontSize:10,color:T.muted,alignSelf:"center"}}>PAGO:</span>{[["all","Todos"],["reserved","Reservado"],["partial","Parcial"],["paid","Pagado"]].map(([v,l])=><Btn key={v} variant={payF===v?"primary":"ghost"} size="sm" onClick={()=>setPayF(v)}>{l}</Btn>)}</div>
@@ -1240,9 +1262,19 @@ function StaffPage({staff,getBalance,settlements,clients,classes,extraCommission
 function FinanzasPage({classes,expenses,staff,onAddExpense}){
   const [newExp,setNewExp]=useState({amount:"",description:"",category:"general"});
   const [saving,setSaving]=useState(false);
-  const ingresosBrutos=classes.reduce((a,c)=>c.scenario==="own_class"?a+c.schoolCut:a+c.paidAmount,0);
-  const totalComisiones=classes.reduce((a,c)=>a+c.sellerCommission,0);
-  const totalInstructores=classes.reduce((a,c)=>a+c.instructorEarning,0);
+  const [season,setSeason]=useState("current");
+  const [customFrom,setCustomFrom]=useState(seasonRange().from);
+  const [customTo,setCustomTo]=useState(seasonRange().to);
+  const {sfrom,sto}=useMemo(()=>{
+    if(season==="current") return {sfrom:seasonRange().from,sto:seasonRange().to};
+    if(season==="last")    return {sfrom:seasonRange(-1).from,sto:seasonRange(-1).to};
+    if(season==="custom")  return {sfrom:customFrom,sto:customTo};
+    return {sfrom:"2000-01-01",sto:"2099-12-31"};
+  },[season,customFrom,customTo]);
+  const filteredClasses=useMemo(()=>classes.filter(c=>c.classDate>=sfrom&&c.classDate<=sto),[classes,sfrom,sto]);
+  const ingresosBrutos=filteredClasses.reduce((a,c)=>c.scenario==="own_class"?a+c.schoolCut:a+c.paidAmount,0);
+  const totalComisiones=filteredClasses.reduce((a,c)=>a+c.sellerCommission,0);
+  const totalInstructores=filteredClasses.reduce((a,c)=>a+c.instructorEarning,0);
   const totalGastos=expenses.reduce((a,e)=>a+e.amount,0);
   const netosAntes=ingresosBrutos-totalComisiones-totalInstructores;
   const netosFinal=netosAntes-totalGastos;
@@ -1254,6 +1286,20 @@ function FinanzasPage({classes,expenses,staff,onAddExpense}){
   }
   return(
     <div style={{display:"flex",flexDirection:"column",gap:24}}>
+      <Card style={{padding:"12px 18px"}}>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+          <span style={{fontSize:11,color:T.muted,fontWeight:700}}>TEMPORADA:</span>
+          {[["current","Esta temporada"],["last","Temporada anterior"],["all","Todo"],["custom","Personalizado"]].map(([v,l])=>(
+            <Btn key={v} variant={season===v?"primary":"ghost"} size="sm" onClick={()=>setSeason(v)}>{l}</Btn>
+          ))}
+          {season==="custom"&&<>
+            <input type="date" value={customFrom} onChange={e=>setCustomFrom(e.target.value)} style={{background:T.surface,border:`1px solid ${T.border}`,color:T.text,borderRadius:7,padding:"5px 10px",fontSize:12,outline:"none",fontFamily:"inherit"}}/>
+            <span style={{color:T.muted}}>—</span>
+            <input type="date" value={customTo} onChange={e=>setCustomTo(e.target.value)} style={{background:T.surface,border:`1px solid ${T.border}`,color:T.text,borderRadius:7,padding:"5px 10px",fontSize:12,outline:"none",fontFamily:"inherit"}}/>
+          </>}
+          <span style={{marginLeft:"auto",fontSize:12,color:T.textDim}}><b style={{color:T.text}}>{filteredClasses.length}</b> clases en el período</span>
+        </div>
+      </Card>
       <div style={{background:`${T.teal}0a`,border:`1px solid ${T.teal}30`,borderRadius:10,padding:"10px 16px",fontSize:12,color:T.textDim}}>🔒 Módulo exclusivo del administrador.</div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:14}}>
         <Card><Stat label="Ingresos Brutos" value={fmt(ingresosBrutos)} color={T.green} icon="↑"/></Card>
