@@ -1279,6 +1279,82 @@ function StaffPage({staff,getBalance,settlements,clients,classes,extraCommission
   );
 }
 
+function DesgloseNeto({ingresosBrutos,aCobrar,totalComisiones,totalInstructores,totalGastos,netosFinal,netoProyectado,filteredClasses,staff,estimatedInstrCost,unassignedClasses,defaultHourlyRate}){
+  const [expanded,setExpanded]=useState(null);
+  const toggle=k=>setExpanded(p=>p===k?null:k);
+
+  const byVendedor=useMemo(()=>{
+    const m={};
+    filteredClasses.forEach(c=>{
+      if(!c.sellerCommission) return;
+      const k=c.sellerId||"__escuela__";
+      if(!m[k]){const s=staff.find(x=>x.id===k);m[k]={name:s?.name||"Escuela",amount:0,clases:0};}
+      m[k].amount+=c.sellerCommission; m[k].clases++;
+    });
+    return Object.values(m).sort((a,b)=>b.amount-a.amount);
+  },[filteredClasses,staff]);
+
+  const byInstructor=useMemo(()=>{
+    const m={};
+    filteredClasses.forEach(c=>{
+      const earn=c.instructorEarning||0;
+      const k=c.instructorId||"__unassigned__";
+      if(!m[k]){const s=staff.find(x=>x.id===k);m[k]={name:s?.name||(k==="__unassigned__"?"Sin asignar (estimado)":"?"),amount:0,clases:0,estimated:k==="__unassigned__"};}
+      if(k==="__unassigned__"){
+        const hours=c.instructorHours||0;
+        m[k].amount+=hours*defaultHourlyRate;
+      } else {
+        m[k].amount+=earn;
+      }
+      m[k].clases++;
+    });
+    return Object.values(m).sort((a,b)=>b.amount-a.amount);
+  },[filteredClasses,staff,defaultHourlyRate]);
+
+  const rows=[
+    {key:"cobrado",   label:"Cobrado",                  value:ingresosBrutos, color:T.green,  sign:"+"},
+    {key:"acobrar",   label:"+ A cobrar",                value:aCobrar,        color:T.orange, sign:"+"},
+    {key:"comisiones",label:"Comisiones vendedores",     value:totalComisiones,color:T.cyan,   sign:"−", expandable:true},
+    {key:"honorarios",label:"Honorarios instructores",   value:totalInstructores,color:T.purple,sign:"−", expandable:true},
+    {key:"gastos",    label:"Gastos operativos",         value:totalGastos,    color:T.orange, sign:"−"},
+    {key:"neto",      label:"── NETO FINAL (cobrado)",   value:netosFinal,     color:T.gold,   sign:"=", highlight:true},
+    {key:"proyectado",label:"── NETO PROYECTADO",        value:netoProyectado, color:T.teal,   sign:"=", highlight:true},
+  ];
+
+  return(
+    <Card>
+      <SectionTitle>Desglose Neto</SectionTitle>
+      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+        {rows.map(r=>(
+          <div key={r.key}>
+            <div
+              onClick={r.expandable?()=>toggle(r.key):undefined}
+              style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 10px",background:r.highlight?`${r.color}10`:T.surface,borderRadius:7,border:r.highlight?`1px solid ${r.color}30`:"none",cursor:r.expandable?"pointer":"default"}}
+            >
+              <div style={{display:"flex",alignItems:"center",gap:6}}>
+                <span style={{fontSize:12,color:r.highlight?r.color:T.textDim,fontWeight:r.highlight?700:400}}>{r.label}</span>
+                {r.expandable&&<span style={{fontSize:10,color:T.muted}}>{expanded===r.key?"▲":"▼"}</span>}
+              </div>
+              <div style={{display:"flex",gap:8}}><span style={{fontSize:11,color:T.muted}}>{r.sign}</span><span style={{fontFamily:"monospace",color:r.color,fontWeight:700}}>{fmt(r.value)}</span></div>
+            </div>
+            {r.expandable&&expanded===r.key&&(
+              <div style={{margin:"2px 0 4px",padding:"8px 12px",background:T.surface,border:`1px solid ${T.border}`,borderRadius:7,fontSize:11}}>
+                {(r.key==="comisiones"?byVendedor:byInstructor).map((d,i)=>(
+                  <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:i<(r.key==="comisiones"?byVendedor:byInstructor).length-1?`1px solid ${T.border}`:"none"}}>
+                    <span style={{color:d.estimated?T.orange:T.textDim}}>{d.name}{d.estimated?" ⚠":""}  <span style={{color:T.muted}}>({d.clases} clase{d.clases!==1?"s":""})</span></span>
+                    <span style={{fontFamily:"monospace",color:d.estimated?T.orange:r.color,fontWeight:600}}>{fmt(d.amount)}</span>
+                  </div>
+                ))}
+                {(r.key==="comisiones"?byVendedor:byInstructor).length===0&&<span style={{color:T.muted}}>Sin datos</span>}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
 function FinanzasPage({classes,expenses,staff,config,onAddExpense}){
   const [newExp,setNewExp]=useState({amount:"",description:"",category:"general"});
   const [saving,setSaving]=useState(false);
@@ -1352,17 +1428,14 @@ function FinanzasPage({classes,expenses,staff,config,onAddExpense}){
             <Btn variant="teal" full disabled={saving} onClick={addExp}>{saving?"Guardando...":"＋ Registrar Gasto"}</Btn>
           </div>
         </Card>
-        <Card>
-          <SectionTitle>Desglose Neto</SectionTitle>
-          <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {[["Cobrado",fmt(ingresosBrutos),T.green,"+"],[`+ A cobrar`,fmt(aCobrar),T.orange,"+"],[`Comisiones vendedores`,fmt(totalComisiones),T.cyan,"−"],["Honorarios instructores",fmt(totalInstructores),T.purple,"−"],["Gastos operativos",fmt(totalGastos),T.orange,"−"],["── NETO FINAL (cobrado)",fmt(netosFinal),T.gold,"="],["── NETO PROYECTADO",fmt(netoProyectado),T.teal,"="]].map(([l,v,c,sign])=>(
-              <div key={l} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 10px",background:l.startsWith("──")?`${c}10`:T.surface,borderRadius:7,border:l.startsWith("──")?`1px solid ${c}30`:"none"}}>
-                <div style={{fontSize:12,color:l.startsWith("──")?c:T.textDim,fontWeight:l.startsWith("──")?700:400}}>{l}</div>
-                <div style={{display:"flex",gap:8}}><span style={{fontSize:11,color:T.muted}}>{sign}</span><span style={{fontFamily:"monospace",color:c,fontWeight:700}}>{v}</span></div>
-              </div>
-            ))}
-          </div>
-        </Card>
+        <DesgloseNeto
+          ingresosBrutos={ingresosBrutos} aCobrar={aCobrar}
+          totalComisiones={totalComisiones} totalInstructores={totalInstructores}
+          totalGastos={totalGastos} netosFinal={netosFinal} netoProyectado={netoProyectado}
+          filteredClasses={filteredClasses} staff={staff}
+          estimatedInstrCost={estimatedInstrCost} unassignedClasses={unassignedClasses}
+          defaultHourlyRate={defaultHourlyRate}
+        />
       </div>
       <Card style={{padding:0,overflow:"hidden"}}>
         <div style={{padding:"14px 16px",borderBottom:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between"}}>
