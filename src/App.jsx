@@ -849,7 +849,7 @@ function AdminApp() {
         {page==="classes"  &&<ClassesPage classes={enrichedClasses} staff={staff} clients={clients} onEdit={isViewer?undefined:c=>setModal({type:"class_edit",data:c})} onNew={isViewer?undefined:()=>setModal({type:"class_edit",data:null})} onClientClick={goToClient} onFinanceClick={c=>setModal({type:"class_finance",data:c})} onDelete={isViewer?undefined:async(id)=>{await deleteClass(id);showToast("✓ Clase eliminada")}}/>}
         {page==="clients"  &&<ClientsPage clients={clients} staff={staff} classes={enrichedClasses} selectedClientId={selectedClientId} onClearSelected={()=>setSelectedClientId(null)} onEdit={isViewer?undefined:c=>setModal({type:"client_edit",data:c})} onNew={isViewer?undefined:()=>setModal({type:"client_edit",data:null})}/>}
         {page==="staff"    &&<StaffPage staff={staff} getBalance={getBalance} settlements={settlements} clients={clients} classes={enrichedClasses} selectedStaffId={selectedStaffId} onClearSelected={()=>setSelectedStaffId(null)} onToggle={isViewer?undefined:handleToggle} onEdit={isViewer?undefined:s=>setModal({type:"staff_edit",data:s})} onNew={isViewer?undefined:()=>setModal({type:"staff_edit",data:null})} onSettle={isViewer?undefined:s=>setModal({type:"settle",data:{staffId:s.id,name:s.name}})} extraCommissions={extraCommissions} onAddExtra={isViewer?undefined:s=>setModal({type:"extra_commission",data:s})} onDeleteExtra={isViewer?undefined:async(id)=>{await deleteExtraCommission(id);showToast("✓ Comisión eliminada");}}/>}
-        {page==="finanzas" &&<FinanzasPage classes={enrichedClasses} expenses={expenses} staff={staff} onAddExpense={isViewer?undefined:addExpense}/>}
+        {page==="finanzas" &&<FinanzasPage classes={enrichedClasses} expenses={expenses} staff={staff} config={config} onAddExpense={isViewer?undefined:addExpense}/>}
         {page==="stats"    &&<EstadisticasPage classes={enrichedClasses} staff={staff} clients={clients} config={config}/>}
         {page==="search"   &&<SearchPage clients={clients} classes={enrichedClasses} staff={staff} onViewClient={c=>{setSelectedClientId(c.id);setPage("clients");}}/>}
         {page==="config"   &&<ConfigPage config={config} onSave={async (c)=>{await saveConfig(c);showToast("✓ Configuración guardada");}} staff={staff} onSaveStaff={handleSaveStaff}/>}
@@ -1279,7 +1279,7 @@ function StaffPage({staff,getBalance,settlements,clients,classes,extraCommission
   );
 }
 
-function FinanzasPage({classes,expenses,staff,onAddExpense}){
+function FinanzasPage({classes,expenses,staff,config,onAddExpense}){
   const [newExp,setNewExp]=useState({amount:"",description:"",category:"general"});
   const [saving,setSaving]=useState(false);
   const [season,setSeason]=useState("current");
@@ -1292,9 +1292,18 @@ function FinanzasPage({classes,expenses,staff,onAddExpense}){
     return {sfrom:"2000-01-01",sto:"2099-12-31"};
   },[season,customFrom,customTo]);
   const filteredClasses=useMemo(()=>classes.filter(c=>c.classDate>=sfrom&&c.classDate<=sto),[classes,sfrom,sto]);
+  const defaultHourlyRate=useMemo(()=>{
+    const rates=staff.filter(s=>s.hourlyRate>0).map(s=>s.hourlyRate);
+    return rates.length>0?rates.reduce((a,b)=>a+b,0)/rates.length:40;
+  },[staff]);
+  const unassignedClasses=filteredClasses.filter(c=>!c.instructorId&&c.scenario!=="own_class");
+  const estimatedInstrCost=unassignedClasses.reduce((a,c)=>{
+    const hours=c.instructorHours||config.rates.find(r=>r.id===c.classTypeId)?.hours||0;
+    return a+hours*defaultHourlyRate;
+  },0);
   const ingresosBrutos=filteredClasses.reduce((a,c)=>c.scenario==="own_class"?a+c.schoolCut:a+c.paidAmount,0);
   const totalComisiones=filteredClasses.reduce((a,c)=>a+c.sellerCommission,0);
-  const totalInstructores=filteredClasses.reduce((a,c)=>a+c.instructorEarning,0);
+  const totalInstructores=filteredClasses.reduce((a,c)=>a+c.instructorEarning,0)+estimatedInstrCost;
   const totalGastos=expenses.reduce((a,e)=>a+e.amount,0);
   const netosAntes=ingresosBrutos-totalComisiones-totalInstructores;
   const netosFinal=netosAntes-totalGastos;
@@ -1321,6 +1330,7 @@ function FinanzasPage({classes,expenses,staff,onAddExpense}){
         </div>
       </Card>
       <div style={{background:`${T.teal}0a`,border:`1px solid ${T.teal}30`,borderRadius:10,padding:"10px 16px",fontSize:12,color:T.textDim}}>🔒 Módulo exclusivo del administrador.</div>
+      {unassignedClasses.length>0&&<div style={{background:`${T.orange}10`,border:`1px solid ${T.orange}40`,borderRadius:10,padding:"10px 16px",fontSize:12,color:T.orange}}>⚠ <b>{unassignedClasses.length} clase{unassignedClasses.length!==1?"s":""} sin instructor</b> — se estimó un costo de <b>{fmt(estimatedInstrCost)}</b> ({fmt(defaultHourlyRate)}/h × horas de cada tipo). El neto se ajustará cuando se asignen.</div>}
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:14}}>
         <Card><Stat label="Ingresos Brutos" value={fmt(ingresosBrutos)} color={T.green} icon="↑"/></Card>
         <Card><Stat label="Comisiones Vendedores" value={fmt(totalComisiones)} color={T.cyan} icon="→"/></Card>
