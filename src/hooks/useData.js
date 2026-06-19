@@ -57,7 +57,8 @@ export function useStaff() {
           commission_pct: staffData.commissionPct,
           hourly_rate:    staffData.hourlyRate,
           is_active:      staffData.isActive,
-          is_owner:       staffData.isOwner || false,
+          is_owner:        staffData.isOwner || false,
+          is_admin_viewer: staffData.isAdminViewer || false,
         })
         .eq("id", staffData.id);
       if (error) throw error;
@@ -65,14 +66,15 @@ export function useStaff() {
       const { error } = await supabase
         .from("staff")
         .insert({
-          name:           staffData.name,
-          email:          staffData.email,
-          phone:          staffData.phone,
-          role:           staffData.role,
-          commission_pct: staffData.commissionPct,
-          hourly_rate:    staffData.hourlyRate,
-          is_active:      staffData.isActive,
-          is_owner:       staffData.isOwner || false,
+          name:            staffData.name,
+          email:           staffData.email,
+          phone:           staffData.phone,
+          role:            staffData.role,
+          commission_pct:  staffData.commissionPct,
+          hourly_rate:     staffData.hourlyRate,
+          is_active:       staffData.isActive,
+          is_owner:        staffData.isOwner || false,
+          is_admin_viewer: staffData.isAdminViewer || false,
         });
       if (error) throw error;
     }
@@ -90,6 +92,7 @@ export function useStaff() {
     hourlyRate:     s.hourly_rate,
     isActive:       s.is_active,
     isOwner:        s.is_owner,
+    isAdminViewer:  s.is_admin_viewer,
     userId:         s.user_id,
   }));
 

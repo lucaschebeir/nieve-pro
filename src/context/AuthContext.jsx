@@ -97,7 +97,7 @@ export function AuthProvider({ children }) {
       staffProfile,
       loading: authLoading,
       isAdmin:  staffProfile?.role === "admin",
-      isViewer: staffProfile?.role === "viewer",
+      isViewer: staffProfile?.role === "viewer" || !!staffProfile?.is_admin_viewer,
       isRecovery,
       signIn,
       signOut,

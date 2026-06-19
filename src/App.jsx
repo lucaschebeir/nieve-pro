@@ -547,7 +547,7 @@ function ModalExtraCommission({staff,onSave,onClose}){
   );
 }
 function ModalStaffEdit({data,config,onSave,onClose}){
-  const [form,setForm]=useState(data?{...data}:{name:"",email:"",phone:"",role:"seller",commissionPct:10,hourlyRate:15,isActive:true});
+  const [form,setForm]=useState(data?{...data}:{name:"",email:"",phone:"",role:"seller",commissionPct:10,hourlyRate:15,isActive:true,isAdminViewer:false});
   const [saving,setSaving]=useState(false);
   async function submit(){
     setSaving(true);
@@ -576,6 +576,10 @@ function ModalStaffEdit({data,config,onSave,onClose}){
   <div style={{display:"flex",alignItems:"center",gap:10}}>
     <Toggle value={form.isOwner||false} onChange={v=>setForm(p=>({...p,isOwner:v}))}/>
     <span style={{fontSize:13,color:T.gold}}>⭐ Instructor dueño (cobra 100%)</span>
+  </div>
+  <div style={{display:"flex",alignItems:"center",gap:10}}>
+    <Toggle value={form.isAdminViewer||false} onChange={v=>setForm(p=>({...p,isAdminViewer:v}))}/>
+    <span style={{fontSize:13,color:T.cyan}}>👁 Ver app completa sin editar</span>
   </div>
 </div>
         {!data&&<div style={{background:`${T.gold}10`,border:`1px solid ${T.gold}30`,borderRadius:8,padding:12,fontSize:12,color:T.textDim,lineHeight:1.7}}>⚠ Después de crear el perfil, creá el usuario en Supabase Authentication con el mismo email y vinculalo con UPDATE staff SET user_id='...'</div>}
