@@ -1292,10 +1292,7 @@ function FinanzasPage({classes,expenses,staff,config,onAddExpense}){
     return {sfrom:"2000-01-01",sto:"2099-12-31"};
   },[season,customFrom,customTo]);
   const filteredClasses=useMemo(()=>classes.filter(c=>c.classDate>=sfrom&&c.classDate<=sto),[classes,sfrom,sto]);
-  const defaultHourlyRate=useMemo(()=>{
-    const rates=staff.filter(s=>s.hourlyRate>0).map(s=>s.hourlyRate);
-    return rates.length>0?rates.reduce((a,b)=>a+b,0)/rates.length:40;
-  },[staff]);
+  const defaultHourlyRate=40;
   const unassignedClasses=filteredClasses.filter(c=>!c.instructorId&&c.scenario!=="own_class");
   const estimatedInstrCost=unassignedClasses.reduce((a,c)=>{
     const hours=c.instructorHours||config.rates.find(r=>r.id===c.classTypeId)?.hours||0;
