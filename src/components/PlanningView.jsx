@@ -1,7 +1,7 @@
 // src/components/PlanningView.jsx
 // Módulo de Planning — grilla semanal (admin) y agenda diaria (instructor)
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { supabase } from "../supabase";
 import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
@@ -152,6 +152,7 @@ const TYPE_COLORS = {
   "44deac8a-0fcc-45c7-bd46-feb14be29eb5": T.green,    // Grupal
 };
 function classColor(cls) {
+  if (!cls.instructorId) return T.red;
   return TYPE_COLORS[cls.classTypeId] ?? T.muted;
 }
 
@@ -1019,10 +1020,57 @@ export function PlanningInstructorView({ classes, staffMember }) {
 }
 
 // ─── PLANNING WEEK OVERVIEW (admin) ──────────────────────────────────────────
+function WeekCell({ classes, onEdit, showInstructor, staff }) {
+  const sorted = [...classes].sort((a, b) => (timeToMin(a.horarioInicio) ?? 9999) - (timeToMin(b.horarioInicio) ?? 9999));
+  return (
+    <div style={{ padding: 4, display: "flex", flexDirection: "column", gap: 3, minHeight: 52 }}>
+      {sorted.map(c => {
+        const color = classColor(c);
+        const startMin = timeToMin(c.horarioInicio);
+        const endStr = startMin != null ? fmtTime(minToTime(startMin + classDuration(c))) : null;
+        const instr = showInstructor ? staff.find(s => s.id === c.instructorId) : null;
+        return (
+          <div key={c.id} onClick={() => onEdit && onEdit(c)}
+            style={{ background: `${color}14`, border: `1px solid ${color}30`,
+              borderLeft: `3px solid ${color}`, borderRadius: 5, padding: "3px 6px",
+              cursor: onEdit ? "pointer" : "default", fontSize: 10 }}>
+            {c.horarioInicio && (
+              <div style={{ color: T.textDim, fontSize: 9 }}>
+                {fmtTime(c.horarioInicio)}{endStr ? `–${endStr}` : ""}
+              </div>
+            )}
+            <div style={{ fontWeight: 700, color: T.text, overflow: "hidden",
+              textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.clientName || "—"}</div>
+            <div style={{ color, fontSize: 9 }}>{c.classTypeName || "—"}</div>
+            {instr && <div style={{ color: T.textDim, fontSize: 9 }}>👤 {instr.name}</div>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function PlanningWeekOverview({ classes, staff, onEdit }) {
   const [anchorDate, setAnchorDate] = useState(todayStr());
   const weekDays = getWeekDays(anchorDate);
   const today = todayStr();
+
+  const instructors = useMemo(() => {
+    const weekClasses = classes.filter(c => weekDays.includes(c.classDate));
+    const activeInstr = staff.filter(s => (s.role === "instructor" || s.role === "both") && s.isActive);
+    const extraIds = weekClasses
+      .filter(c => c.instructorId && !activeInstr.find(s => s.id === c.instructorId))
+      .map(c => c.instructorId)
+      .filter((id, i, arr) => arr.indexOf(id) === i);
+    const extra = extraIds.map(id => staff.find(s => s.id === id)).filter(Boolean);
+    return [...activeInstr, ...extra];
+  }, [staff, classes, weekDays]);
+
+  const hasUnassigned = useMemo(() =>
+    classes.some(c => weekDays.includes(c.classDate) && !c.instructorId),
+  [classes, weekDays]);
+
+  const COL = `140px repeat(7, minmax(110px, 1fr))`;
 
   return (
     <div>
@@ -1032,53 +1080,61 @@ function PlanningWeekOverview({ classes, staff, onEdit }) {
         <Btn variant="ghost" size="sm" onClick={() => setAnchorDate(d => addWeeks(d, 1))}>Siguiente →</Btn>
         <Btn variant="ghost" size="sm" onClick={() => setAnchorDate(todayStr())}>Hoy</Btn>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(140px, 1fr))", gap: 6, overflowX: "auto" }}>
-        {weekDays.map(d => {
-          const dayClasses = classes
-            .filter(c => c.classDate === d)
-            .sort((a, b) => (timeToMin(a.horarioInicio) ?? 9999) - (timeToMin(b.horarioInicio) ?? 9999));
-          const isToday = d === today;
-          const total = dayClasses.reduce((a, c) => a + c.amount, 0);
-          return (
-            <div key={d} style={{ background: isToday ? `${T.accent}08` : T.card,
-              border: `1px solid ${isToday ? T.accent : T.border}`, borderRadius: 10, overflow: "hidden" }}>
-              <div style={{ padding: "7px 10px", background: isToday ? `${T.accent}18` : T.surface,
-                borderBottom: `1px solid ${T.border}` }}>
-                <div style={{ fontWeight: 800, fontSize: 12, color: isToday ? T.accent : T.text, textTransform: "capitalize" }}>
+      <div style={{ overflowX: "auto" }}>
+        <div style={{ display: "grid", gridTemplateColumns: COL, gap: 1, minWidth: 900, background: T.border, borderRadius: 10, overflow: "hidden" }}>
+          {/* Header */}
+          <div style={{ background: T.surface, padding: "8px 10px" }} />
+          {weekDays.map(d => {
+            const isToday = d === today;
+            const cnt = classes.filter(c => c.classDate === d).length;
+            return (
+              <div key={d} style={{ background: isToday ? `${T.accent}20` : T.surface, padding: "7px 8px", textAlign: "center" }}>
+                <div style={{ fontSize: 11, fontWeight: 800, color: isToday ? T.accent : T.text, textTransform: "capitalize" }}>
                   {fmtDayHeader(d)}
-                  {isToday && <span style={{ marginLeft: 6, background: T.accent, color: T.white, fontSize: 9, padding: "1px 5px", borderRadius: 20 }}>HOY</span>}
+                  {isToday && <span style={{ marginLeft: 4, background: T.accent, color: "#fff", fontSize: 8, padding: "1px 4px", borderRadius: 10 }}>HOY</span>}
                 </div>
-                <div style={{ fontSize: 10, color: T.textDim, marginTop: 1 }}>
-                  {dayClasses.length > 0 ? `${dayClasses.length} clase(s) · $${total.toLocaleString("es-AR")}` : "Sin clases"}
-                </div>
+                <div style={{ fontSize: 9, color: T.textDim }}>{cnt > 0 ? `${cnt} clase(s)` : "—"}</div>
               </div>
-              <div style={{ padding: 5, display: "flex", flexDirection: "column", gap: 4, minHeight: 80 }}>
-                {dayClasses.map(c => {
-                  const color = classColor(c);
-                  const instr = staff.find(s => s.id === c.instructorId);
-                  const startMin = timeToMin(c.horarioInicio);
-                  const endStr = startMin != null ? fmtTime(minToTime(startMin + classDuration(c))) : null;
+            );
+          })}
+
+          {/* Fila sin asignar */}
+          {hasUnassigned && (
+            <>
+              <div style={{ background: `${T.red}10`, padding: "8px 10px", display: "flex", alignItems: "center" }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: T.red }}>⚠ Sin asignar</span>
+              </div>
+              {weekDays.map(d => {
+                const cls = classes.filter(c => c.classDate === d && !c.instructorId);
+                return (
+                  <div key={d} style={{ background: cls.length ? `${T.red}06` : T.card }}>
+                    <WeekCell classes={cls} onEdit={onEdit} staff={staff} />
+                  </div>
+                );
+              })}
+            </>
+          )}
+
+          {/* Filas por instructor */}
+          {instructors.map(instr => {
+            const hasAny = weekDays.some(d => classes.some(c => c.classDate === d && c.instructorId === instr.id));
+            return (
+              <>
+                <div key={`h-${instr.id}`} style={{ background: T.card, padding: "8px 10px", display: "flex", alignItems: "center", opacity: hasAny ? 1 : 0.4 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: T.text }}>{instr.name}</span>
+                </div>
+                {weekDays.map(d => {
+                  const cls = classes.filter(c => c.classDate === d && c.instructorId === instr.id);
                   return (
-                    <div key={c.id} onClick={() => onEdit && onEdit(c)}
-                      style={{ background: `${color}14`, border: `1px solid ${color}30`,
-                        borderLeft: `3px solid ${color}`, borderRadius: 6, padding: "4px 7px",
-                        cursor: onEdit ? "pointer" : "default", fontSize: 11 }}>
-                      {c.horarioInicio && (
-                        <div style={{ color: T.textDim, fontSize: 10, marginBottom: 1 }}>
-                          {fmtTime(c.horarioInicio)}{endStr ? ` – ${endStr}` : ""}
-                        </div>
-                      )}
-                      <div style={{ fontWeight: 700, color: T.text, overflow: "hidden",
-                        textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.clientName}</div>
-                      <div style={{ color, fontSize: 10 }}>{c.classTypeName || "—"}</div>
-                      {instr && <div style={{ color: T.textDim, fontSize: 10 }}>👤 {instr.name}</div>}
+                    <div key={d} style={{ background: T.card }}>
+                      <WeekCell classes={cls} onEdit={onEdit} staff={staff} />
                     </div>
                   );
                 })}
-              </div>
-            </div>
-          );
-        })}
+              </>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
