@@ -1299,11 +1299,14 @@ function FinanzasPage({classes,expenses,staff,config,onAddExpense}){
     return a+hours*defaultHourlyRate;
   },0);
   const ingresosBrutos=filteredClasses.reduce((a,c)=>c.scenario==="own_class"?a+c.schoolCut:a+c.paidAmount,0);
+  const aCobrar=filteredClasses.reduce((a,c)=>c.scenario==="own_class"?a:a+(c.amount-c.paidAmount),0);
+  const ingresosProyectados=ingresosBrutos+aCobrar;
   const totalComisiones=filteredClasses.reduce((a,c)=>a+c.sellerCommission,0);
   const totalInstructores=filteredClasses.reduce((a,c)=>a+c.instructorEarning,0)+estimatedInstrCost;
   const totalGastos=expenses.reduce((a,e)=>a+e.amount,0);
   const netosAntes=ingresosBrutos-totalComisiones-totalInstructores;
   const netosFinal=netosAntes-totalGastos;
+  const netoProyectado=ingresosProyectados-totalComisiones-totalInstructores-totalGastos;
   async function addExp(){
     if(!newExp.amount||!newExp.description)return;
     setSaving(true);
@@ -1329,12 +1332,13 @@ function FinanzasPage({classes,expenses,staff,config,onAddExpense}){
       <div style={{background:`${T.teal}0a`,border:`1px solid ${T.teal}30`,borderRadius:10,padding:"10px 16px",fontSize:12,color:T.textDim}}>🔒 Módulo exclusivo del administrador.</div>
       {unassignedClasses.length>0&&<div style={{background:`${T.orange}10`,border:`1px solid ${T.orange}40`,borderRadius:10,padding:"10px 16px",fontSize:12,color:T.orange}}>⚠ <b>{unassignedClasses.length} clase{unassignedClasses.length!==1?"s":""} sin instructor</b> — se estimó un costo de <b>{fmt(estimatedInstrCost)}</b> ({fmt(defaultHourlyRate)}/h × horas de cada tipo). El neto se ajustará cuando se asignen.</div>}
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:14}}>
-        <Card><Stat label="Ingresos Brutos" value={fmt(ingresosBrutos)} color={T.green} icon="↑"/></Card>
+        <Card><Stat label="Cobrado" value={fmt(ingresosBrutos)} color={T.green} icon="↑"/></Card>
+        <Card><Stat label="A Cobrar" value={fmt(aCobrar)} color={aCobrar>0?T.orange:T.muted} icon="◑"/></Card>
         <Card><Stat label="Comisiones Vendedores" value={fmt(totalComisiones)} color={T.cyan} icon="→"/></Card>
         <Card><Stat label="Honorarios Instructores" value={fmt(totalInstructores)} color={T.purple} icon="→"/></Card>
         <Card><Stat label="Gastos Operativos" value={fmt(totalGastos)} color={T.orange} icon="↓"/></Card>
-        <Card><Stat label="Neto (sin gastos)" value={fmt(netosAntes)} color={T.teal} icon="="/></Card>
-        <Card style={{background:`${T.gold}08`,borderColor:`${T.gold}40`}}><Stat label="Neto Final" value={fmt(netosFinal)} color={T.gold} icon="★"/></Card>
+        <Card style={{background:`${T.gold}08`,borderColor:`${T.gold}40`}}><Stat label="Neto Final" value={fmt(netosFinal)} color={T.gold} icon="★" sub="sobre lo cobrado"/></Card>
+        <Card style={{background:`${T.teal}08`,borderColor:`${T.teal}40`}}><Stat label="Neto Proyectado" value={fmt(netoProyectado)} color={T.teal} icon="◎" sub="si se cobra todo"/></Card>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:24,alignItems:"start"}}>
         <Card>
@@ -1351,7 +1355,7 @@ function FinanzasPage({classes,expenses,staff,config,onAddExpense}){
         <Card>
           <SectionTitle>Desglose Neto</SectionTitle>
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {[["Ingresos cobrados",fmt(ingresosBrutos),T.green,"+"],[`Comisiones vendedores`,fmt(totalComisiones),T.cyan,"−"],["Honorarios instructores",fmt(totalInstructores),T.purple,"−"],["── Neto antes gastos",fmt(netosAntes),T.teal,"="],["Gastos operativos",fmt(totalGastos),T.orange,"−"],["── NETO FINAL",fmt(netosFinal),T.gold,"="]].map(([l,v,c,sign])=>(
+            {[["Cobrado",fmt(ingresosBrutos),T.green,"+"],[`+ A cobrar`,fmt(aCobrar),T.orange,"+"],[`Comisiones vendedores`,fmt(totalComisiones),T.cyan,"−"],["Honorarios instructores",fmt(totalInstructores),T.purple,"−"],["Gastos operativos",fmt(totalGastos),T.orange,"−"],["── NETO FINAL (cobrado)",fmt(netosFinal),T.gold,"="],["── NETO PROYECTADO",fmt(netoProyectado),T.teal,"="]].map(([l,v,c,sign])=>(
               <div key={l} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 10px",background:l.startsWith("──")?`${c}10`:T.surface,borderRadius:7,border:l.startsWith("──")?`1px solid ${c}30`:"none"}}>
                 <div style={{fontSize:12,color:l.startsWith("──")?c:T.textDim,fontWeight:l.startsWith("──")?700:400}}>{l}</div>
                 <div style={{display:"flex",gap:8}}><span style={{fontSize:11,color:T.muted}}>{sign}</span><span style={{fontFamily:"monospace",color:c,fontWeight:700}}>{v}</span></div>
