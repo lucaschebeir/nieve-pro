@@ -203,9 +203,7 @@ export function useClasses() {
       discipline:          formData.discipline || "ski",
       is_required:         !!formData.isRequired,
       horario_inicio:      formData.horarioInicio || null,
-      // El trigger de Supabase calcula automáticamente:
-      // scenario, seller_commission, instructor_earning,
-      // school_cut, payment_status, instructor_status
+      group_id:            formData.groupId || null,
     };
 
     const count = +formData.daysCount || 1;
@@ -255,6 +253,7 @@ export function useClasses() {
     settlementId:        c.settlement_id,
     horarioInicio:       c.horario_inicio ?? null,
     createdAt:           c.created_at?.split("T")[0],
+    groupId:             c.group_id || null,
   }));
 
   async function updateClassSchedule(classId, { instructorId, horarioInicio }) {
@@ -275,7 +274,30 @@ export function useClasses() {
     refetch();
   }
 
-  return { classes: mapped, loading, error, refetch, saveClass, deleteClass, updateClassSchedule };
+  async function groupClasses(classIds, groupId) {
+    const { error } = await supabase.from("classes").update({ group_id: groupId }).in("id", classIds);
+    if (error) throw error;
+    refetch();
+  }
+
+  async function ungroupClasses(groupId) {
+    const { error } = await supabase.from("classes").update({ group_id: null }).eq("group_id", groupId);
+    if (error) throw error;
+    refetch();
+  }
+
+  async function registerGroupPayment(groupClasses, totalPayment) {
+    const totalAmount = groupClasses.reduce((a, c) => a + c.amount, 0);
+    for (const cls of groupClasses) {
+      const proportion = cls.amount / totalAmount;
+      const newPaid = Math.min(cls.amount, cls.paidAmount + totalPayment * proportion);
+      const { error } = await supabase.from("classes").update({ paid_amount: newPaid }).eq("id", cls.id);
+      if (error) throw error;
+    }
+    refetch();
+  }
+
+  return { classes: mapped, loading, error, refetch, saveClass, deleteClass, updateClassSchedule, groupClasses, ungroupClasses, registerGroupPayment };
 }
 
 // ─── SETTLEMENTS ──────────────────────────────────────────────

@@ -4,7 +4,7 @@
 
 import ResetPasswordScreen from "./components/ResetPasswordScreen";
 import PlanningView, { PlanningInstructorView } from "./components/PlanningView";
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, Fragment } from "react";
 import * as XLSX from "xlsx";
 import { useAuth } from "./context/AuthContext";
 import LoginScreen from "./components/LoginScreen";
@@ -295,6 +295,7 @@ function ModalClassEdit({data,staff,clients,config,onSave,onClose}){
   const [form,setForm]=useState(data?{...data,amount:String(data.amount),peopleCount:String(data.peopleCount),reservationAmount:String(data.reservationAmount||0),paidAmount:String(data.paidAmount||0),sellerId:data.sellerId||"",instructorId:data.instructorId||"",clientId:data.clientId||"",horarioInicio:autoHorario(data.classTypeId,data.horarioInicio)}:empty);
   const [preview,setPreview]=useState(null);
   const [classDates, setClassDates] = useState(data ? [data.classDate] : [today]);
+  const [totalDeposit, setTotalDeposit] = useState("");
   const [saving,setSaving]=useState(false);
   const [unavailWarn,setUnavailWarn]=useState([]);
 
@@ -338,8 +339,12 @@ function ModalClassEdit({data,staff,clients,config,onSave,onClose}){
     if(form.classTypeId===_halfDayId&&!form.horarioInicio){ alert("Elegí el turno del Half Day: Mañana o Tarde."); return; }
     setSaving(true);
     try {
+      const groupId = isNew && classDates.length > 1 ? crypto.randomUUID() : (data?.groupId || null);
+      const perClassDeposit = isNew && classDates.length > 1 && totalDeposit
+        ? String(+totalDeposit / classDates.length)
+        : form.reservationAmount;
       for (const date of classDates) {
-        await onSave({...form, id: isNew?undefined:data?.id, classDate: date});
+        await onSave({...form, id: isNew?undefined:data?.id, classDate: date, groupId, reservationAmount: perClassDeposit});
       }
     }
     catch(e){ alert("Error guardando: "+e.message); }
@@ -430,11 +435,22 @@ function ModalClassEdit({data,staff,clients,config,onSave,onClose}){
             <div style={{fontSize:11,color:T.textDim,marginTop:4}}>Saldo pendiente: <strong style={{color:ps.color}}>{fmt(saldo)}</strong></div>
           </div>
           {isNew?(
-            <div>
-              <Inp label="Seña / Primer Pago (USD)" type="number" value={form.reservationAmount} onChange={v=>set("reservationAmount",v)} placeholder="Ej: 100, 150, 200..."/>
-              <div style={{fontSize:11,color:T.textDim,marginTop:6,background:T.surface,borderRadius:6,padding:"6px 10px"}}>
-                💡 La reserva se crea cuando el cliente abona la seña. El saldo restante se muestra automáticamente.
-              </div>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {classDates.length > 1 ? (
+                <>
+                  <Inp label={`Seña Total (se divide en ${classDates.length} clases)`} type="number" value={totalDeposit} onChange={v=>setTotalDeposit(v)} placeholder="Ej: 300"/>
+                  {totalDeposit && <div style={{fontSize:11,color:T.textDim,background:T.surface,borderRadius:6,padding:"6px 10px"}}>
+                    💡 Cada clase recibirá <strong style={{color:T.accent}}>${(+totalDeposit/classDates.length).toFixed(0)}</strong> de seña.
+                  </div>}
+                </>
+              ) : (
+                <>
+                  <Inp label="Seña / Primer Pago (USD)" type="number" value={form.reservationAmount} onChange={v=>set("reservationAmount",v)} placeholder="Ej: 100, 150, 200..."/>
+                  <div style={{fontSize:11,color:T.textDim,background:T.surface,borderRadius:6,padding:"6px 10px"}}>
+                    💡 La reserva se crea cuando el cliente abona la seña. El saldo restante se muestra automáticamente.
+                  </div>
+                </>
+              )}
             </div>
           ):(
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
@@ -649,7 +665,7 @@ function AdminApp() {
   const { staffProfile, signOut, isAdmin, isViewer, session } = useAuth();
   const { staff, loading: sL, toggleActive, saveStaff } = useStaff();
   const { clients, loading: cL, saveClient } = useClients();
-  const { classes, loading: clL, saveClass, deleteClass, updateClassSchedule } = useClasses();
+  const { classes, loading: clL, saveClass, deleteClass, updateClassSchedule, groupClasses, ungroupClasses, registerGroupPayment } = useClasses();
   const { settlements, loading: stL, settlePeriod } = useSettlements();
   const { expenses, loading: eL, addExpense } = useExpenses();
   const { extraCommissions, addExtraCommission, settleExtraCommissions, deleteExtraCommission, refetch: refetchExtra } = useExtraCommissions();
@@ -846,7 +862,7 @@ function AdminApp() {
       <div style={{padding:24,maxWidth:1360,margin:"0 auto"}}>
         {page==="planning" &&<PlanningView classes={enrichedClasses} staff={staff} isAdmin={true} onUpdate={isViewer?undefined:updateClassSchedule} onEdit={isViewer?undefined:c=>setModal({type:"class_edit",data:c})} onDelete={isViewer?undefined:async(id)=>{await deleteClass(id);showToast("✓ Clase eliminada")}}/>}
         {page==="dashboard"&&<DashboardPage staff={staff} classes={enrichedClasses} settlements={settlements} clients={clients} getBalance={getBalance} onSettle={isViewer?undefined:s=>setModal({type:"settle",data:{staffId:s.id,name:s.name}})} onToggle={isViewer?undefined:handleToggle} onViewStaff={s=>{setSelectedStaffId(s.id);setPage("staff");}}/>}
-        {page==="classes"  &&<ClassesPage classes={enrichedClasses} staff={staff} clients={clients} onEdit={isViewer?undefined:c=>setModal({type:"class_edit",data:c})} onNew={isViewer?undefined:()=>setModal({type:"class_edit",data:null})} onClientClick={goToClient} onFinanceClick={c=>setModal({type:"class_finance",data:c})} onDelete={isViewer?undefined:async(id)=>{await deleteClass(id);showToast("✓ Clase eliminada")}}/>}
+        {page==="classes"  &&<ClassesPage classes={enrichedClasses} staff={staff} clients={clients} onEdit={isViewer?undefined:c=>setModal({type:"class_edit",data:c})} onNew={isViewer?undefined:()=>setModal({type:"class_edit",data:null})} onClientClick={goToClient} onFinanceClick={c=>setModal({type:"class_finance",data:c})} onDelete={isViewer?undefined:async(id)=>{await deleteClass(id);showToast("✓ Clase eliminada")}} onGroupClasses={isViewer?undefined:groupClasses} onUngroupClasses={isViewer?undefined:ungroupClasses} onGroupPayment={isViewer?undefined:registerGroupPayment}/>}
         {page==="clients"  &&<ClientsPage clients={clients} staff={staff} classes={enrichedClasses} selectedClientId={selectedClientId} onClearSelected={()=>setSelectedClientId(null)} onEdit={isViewer?undefined:c=>setModal({type:"client_edit",data:c})} onNew={isViewer?undefined:()=>setModal({type:"client_edit",data:null})}/>}
         {page==="staff"    &&<StaffPage staff={staff} getBalance={getBalance} settlements={settlements} clients={clients} classes={enrichedClasses} selectedStaffId={selectedStaffId} onClearSelected={()=>setSelectedStaffId(null)} onToggle={isViewer?undefined:handleToggle} onEdit={isViewer?undefined:s=>setModal({type:"staff_edit",data:s})} onNew={isViewer?undefined:()=>setModal({type:"staff_edit",data:null})} onSettle={isViewer?undefined:s=>setModal({type:"settle",data:{staffId:s.id,name:s.name}})} extraCommissions={extraCommissions} onAddExtra={isViewer?undefined:s=>setModal({type:"extra_commission",data:s})} onDeleteExtra={isViewer?undefined:async(id)=>{await deleteExtraCommission(id);showToast("✓ Comisión eliminada");}}/>}
         {page==="finanzas" &&<FinanzasPage classes={enrichedClasses} expenses={expenses} staff={staff} config={config} onAddExpense={isViewer?undefined:addExpense}/>}
@@ -950,7 +966,7 @@ function DashboardPage({staff,classes,settlements,clients,getBalance,onSettle,on
   );
 }
 
-function ClassesPage({classes,staff,clients,onEdit,onNew,onClientClick,onFinanceClick,onDelete}){
+function ClassesPage({classes,staff,clients,onEdit,onNew,onClientClick,onFinanceClick,onDelete,onGroupClasses,onUngroupClasses,onGroupPayment}){
   const [payF,setPayF]=useState("all");
   const [instrF,setInstrF]=useState("all");
   const [settF,setSettF]=useState("pending");
@@ -958,12 +974,19 @@ function ClassesPage({classes,staff,clients,onEdit,onNew,onClientClick,onFinance
   const [season,setSeason]=useState("current");
   const [customFrom,setCustomFrom]=useState(seasonRange().from);
   const [customTo,setCustomTo]=useState(seasonRange().to);
+  const [selected,setSelected]=useState(new Set());
+  const [expandedGroups,setExpandedGroups]=useState(new Set());
+  const [groupPayModal,setGroupPayModal]=useState(null); // {groupId, groupClasses}
+  const [groupPayAmount,setGroupPayAmount]=useState("");
+  const [savingPay,setSavingPay]=useState(false);
+
   const {sfrom,sto}=useMemo(()=>{
     if(season==="current") return {sfrom:seasonRange().from,sto:seasonRange().to};
     if(season==="last")    return {sfrom:seasonRange(-1).from,sto:seasonRange(-1).to};
     if(season==="custom")  return {sfrom:customFrom,sto:customTo};
     return {sfrom:"2000-01-01",sto:"2099-12-31"};
   },[season,customFrom,customTo]);
+
   const filtered=useMemo(()=>classes.filter(c=>{
     if(c.classDate<sfrom||c.classDate>sto)return false;
     if(payF!=="all"&&c.paymentStatus!==payF)return false;
@@ -973,17 +996,79 @@ function ClassesPage({classes,staff,clients,onEdit,onNew,onClientClick,onFinance
     if(search&&!c.clientName?.toLowerCase().includes(search.toLowerCase())&&!c.notes?.toLowerCase().includes(search.toLowerCase()))return false;
     return true;
   }),[classes,sfrom,sto,payF,instrF,settF,search]);
-  const totalM=filtered.reduce((a,c)=>{
-  if(c.scenario==="own_class"&&c.schoolCut>0) return a+c.schoolCut;
-  return a+c.amount;
-},0);
-  const totalC=filtered.reduce((a,c)=>{
-  if(c.scenario==="own_class"&&c.schoolCut===0) return a+c.paidAmount;
-  if(c.scenario==="own_class"&&c.schoolCut>0) return a+c.schoolCut;
-  return a+c.paidAmount;
-},0);
+
+  const {groupMap,ungrouped}=useMemo(()=>{
+    const gm={};
+    const ug=[];
+    for(const c of filtered){
+      if(c.groupId){if(!gm[c.groupId])gm[c.groupId]=[];gm[c.groupId].push(c);}
+      else ug.push(c);
+    }
+    return {groupMap:gm,ungrouped:ug};
+  },[filtered]);
+
+  const totalM=filtered.reduce((a,c)=>c.scenario==="own_class"&&c.schoolCut>0?a+c.schoolCut:a+c.amount,0);
+  const totalC=filtered.reduce((a,c)=>c.scenario==="own_class"?a+(c.schoolCut||c.paidAmount):a+c.paidAmount,0);
+
+  function toggleSelect(id){setSelected(s=>{const n=new Set(s);n.has(id)?n.delete(id):n.add(id);return n;});}
+  function toggleGroup(gid){setExpandedGroups(s=>{const n=new Set(s);n.has(gid)?n.delete(gid):n.add(gid);return n;});}
+
+  async function handleGroupSelected(){
+    const ids=[...selected];
+    if(ids.length<2)return;
+    const gid=crypto.randomUUID();
+    await onGroupClasses(ids,gid);
+    setSelected(new Set());
+    setExpandedGroups(s=>new Set([...s,gid]));
+  }
+
+  async function handleGroupPayment(){
+    if(!groupPayModal||!groupPayAmount)return;
+    setSavingPay(true);
+    try{await onGroupPayment(groupPayModal.groupClasses,+groupPayAmount);}
+    catch(e){alert("Error: "+e.message);}
+    finally{setSavingPay(false);setGroupPayModal(null);setGroupPayAmount("");}
+  }
+
+  function ClassRow({c,indent=false}){
+    const seller=staff.find(s=>s.id===c.sellerId);
+    const instr=staff.find(s=>s.id===c.instructorId);
+    const staffE=(c.sellerCommission||0)+(c.instructorEarning||0);
+    const lb=c.paymentStatus==="reserved"?T.gold:c.paymentStatus==="partial"?T.orange:T.green;
+    return(
+      <tr style={{borderLeft:`3px solid ${lb}40`,background:indent?`${T.surface}80`:undefined}}>
+        <TD style={{fontSize:12,color:T.textDim,whiteSpace:"nowrap",paddingLeft:indent?28:undefined}}>{fmtDate(c.classDate)}</TD>
+        <TD><Badge text={c.classTypeName||"—"} color={T.muted} small/><Badge text={c.discipline==="snowboard"?"🏂 Snowboard":"🎿 Esquí"} color={c.discipline==="snowboard"?T.purple:T.cyan} small/></TD>
+        <TD><button onClick={()=>onClientClick(c.clientId,c.clientName)} style={{background:"none",border:"none",color:T.accent,fontWeight:700,fontSize:13,cursor:"pointer",padding:0,fontFamily:"inherit",textDecoration:"underline"}}>{c.clientName}</button>{c.notes&&<div style={{fontSize:11,color:T.textDim,maxWidth:140,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.notes}</div>}</TD>
+        <TD><div style={{fontFamily:"monospace",fontWeight:800}}>{fmt(c.amount)}</div><button onClick={()=>onFinanceClick(c)} style={{background:"none",border:"none",color:PAY_STATUS[c.paymentStatus]?.color,fontSize:11,cursor:"pointer",padding:0,fontFamily:"monospace",fontWeight:600,textDecoration:"underline"}}>{fmt(c.paidAmount)} ▸</button><PayBar amount={c.amount} paidAmount={c.paidAmount}/></TD>
+        <TD><PayBadge status={c.paymentStatus}/></TD>
+        <TD style={{fontSize:12}}>{seller?<div style={{display:"flex",alignItems:"center",gap:6}}><Av name={seller.name} size={22} color={T.cyan}/>{seller.name}</div>:<span style={{color:T.muted}}>—</span>}</TD>
+        <TD>{instr?<div><div style={{display:"flex",alignItems:"center",gap:6,fontSize:12}}><Av name={instr.name} size={22} color={T.purple}/>{instr.name}</div><InstrBadge status={c.instructorStatus}/></div>:<InstrBadge status="unassigned"/>}</TD>
+        <TD style={{fontFamily:"monospace",color:T.accent,fontWeight:700}}>{fmt(staffE)}</TD>
+        <TD><Badge text={c.isSettled?"LIQ.":"PEND."} color={c.isSettled?T.muted:T.gold} small dot={!c.isSettled}/></TD>
+        <TD><div style={{display:"flex",gap:6}}>{onEdit&&<Btn variant="ghost" size="sm" onClick={()=>onEdit(c)}>✎</Btn>}{onDelete&&<Btn variant="danger" size="sm" onClick={()=>{if(window.confirm("¿Eliminar esta clase?"))onDelete(c.id)}}>✕</Btn>}</div></TD>
+      </tr>
+    );
+  }
+
   return(
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
+      {groupPayModal&&(
+        <Modal title="Registrar Pago del Grupo" onClose={()=>{setGroupPayModal(null);setGroupPayAmount("");}}>
+          <div style={{display:"flex",flexDirection:"column",gap:14}}>
+            <div style={{background:T.surface,borderRadius:8,padding:"10px 14px",fontSize:12,color:T.textDim}}>
+              <strong style={{color:T.text}}>{groupPayModal.groupClasses[0]?.clientName}</strong> · {groupPayModal.groupClasses.length} clases<br/>
+              Total: <strong style={{color:T.text}}>{fmt(groupPayModal.groupClasses.reduce((a,c)=>a+c.amount,0))}</strong> · Cobrado: <strong style={{color:T.green}}>{fmt(groupPayModal.groupClasses.reduce((a,c)=>a+c.paidAmount,0))}</strong> · Saldo: <strong style={{color:T.orange}}>{fmt(groupPayModal.groupClasses.reduce((a,c)=>a+(c.amount-c.paidAmount),0))}</strong>
+            </div>
+            <Inp label="Monto recibido (USD)" type="number" value={groupPayAmount} onChange={v=>setGroupPayAmount(v)} placeholder="Ej: 500" required/>
+            <div style={{fontSize:11,color:T.textDim,background:T.surface,borderRadius:6,padding:"6px 10px"}}>Se distribuirá proporcionalmente entre las {groupPayModal.groupClasses.length} clases del grupo.</div>
+            <div style={{display:"flex",gap:8}}>
+              <Btn full variant="primary" disabled={!groupPayAmount||savingPay} onClick={handleGroupPayment}>{savingPay?"Guardando...":"✓ Registrar Pago"}</Btn>
+              <Btn full variant="ghost" onClick={()=>{setGroupPayModal(null);setGroupPayAmount("");}}>Cancelar</Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
       <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>
         <Card style={{padding:"12px 16px"}}><Stat label="Monto Total" value={fmt(totalM)} color={T.text}/></Card>
         <Card style={{padding:"12px 16px"}}><Stat label="Cobrado" value={fmt(totalC)} color={T.green}/></Card>
@@ -1008,41 +1093,68 @@ function ClassesPage({classes,staff,clients,onEdit,onNew,onClientClick,onFinance
           <div style={{display:"flex",gap:4}}><span style={{fontSize:10,color:T.muted,alignSelf:"center"}}>ESTADO:</span>{[["pending","Pendientes"],["settled","Liquidadas"],["all","Todas"]].map(([v,l])=><Btn key={v} variant={settF===v?"primary":"ghost"} size="sm" onClick={()=>setSettF(v)}>{l}</Btn>)}</div>
           <Btn variant="primary" size="sm" onClick={onNew} style={{marginLeft:"auto"}}>＋ Nueva</Btn>
         </div>
+        {selected.size>=2&&onGroupClasses&&(
+          <div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:10}}>
+            <span style={{fontSize:12,color:T.textDim}}>{selected.size} clases seleccionadas</span>
+            <Btn variant="primary" size="sm" onClick={handleGroupSelected}>Agrupar seleccionadas</Btn>
+            <Btn variant="ghost" size="sm" onClick={()=>setSelected(new Set())}>Cancelar</Btn>
+          </div>
+        )}
       </Card>
       <Card style={{padding:0,overflow:"auto"}}>
         <table style={{width:"100%",borderCollapse:"collapse",minWidth:1050}}>
           <thead><tr><TH>Fecha</TH><TH>Tipo</TH><TH>Cliente</TH><TH>Monto / Cobrado</TH><TH>Pago</TH><TH>Vendedor</TH><TH>Instructor</TH><TH>Staff Gana</TH><TH>Liquid.</TH><TH>Edit.</TH></tr></thead>
           <tbody>
-            {filtered.map(c=>{
-              const seller=staff.find(s=>s.id===c.sellerId);
-              const instr=staff.find(s=>s.id===c.instructorId);
-              const staffE=(c.sellerCommission||0)+(c.instructorEarning||0);
-              const lb=c.paymentStatus==="reserved"?T.gold:c.paymentStatus==="partial"?T.orange:T.green;
+            {Object.entries(groupMap).map(([gid,gclasses])=>{
+              const expanded=expandedGroups.has(gid);
+              const gTotal=gclasses.reduce((a,c)=>a+c.amount,0);
+              const gPaid=gclasses.reduce((a,c)=>a+c.paidAmount,0);
+              const gSaldo=gTotal-gPaid;
+              const worstStatus=gclasses.some(c=>c.paymentStatus==="reserved")?"reserved":gclasses.some(c=>c.paymentStatus==="partial")?"partial":"paid";
+              const lb=worstStatus==="reserved"?T.gold:worstStatus==="partial"?T.orange:T.green;
+              const client=gclasses[0];
               return(
-                <tr key={c.id} style={{borderLeft:`3px solid ${lb}40`}}>
-                  <TD style={{fontSize:12,color:T.textDim,whiteSpace:"nowrap"}}>{fmtDate(c.classDate)}</TD>
-                  <TD>
-  <Badge text={c.classTypeName||"—"} color={T.muted} small/>
-  <Badge text={c.discipline==="snowboard"?"🏂 Snowboard":"🎿 Esquí"} color={c.discipline==="snowboard"?T.purple:T.cyan} small/>
-</TD>
-                  <TD>
-                    <button onClick={()=>onClientClick(c.clientId,c.clientName)} style={{background:"none",border:"none",color:T.accent,fontWeight:700,fontSize:13,cursor:"pointer",padding:0,fontFamily:"inherit",textDecoration:"underline"}}>{c.clientName}</button>
-                    {c.notes&&<div style={{fontSize:11,color:T.textDim,maxWidth:140,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.notes}</div>}
-                  </TD>
-                  <TD>
-                    <div style={{fontFamily:"monospace",fontWeight:800}}>{fmt(c.amount)}</div>
-                    <button onClick={()=>onFinanceClick(c)} style={{background:"none",border:"none",color:PAY_STATUS[c.paymentStatus]?.color,fontSize:11,cursor:"pointer",padding:0,fontFamily:"monospace",fontWeight:600,textDecoration:"underline"}}>{fmt(c.paidAmount)} ▸</button>
-                    <PayBar amount={c.amount} paidAmount={c.paidAmount}/>
-                  </TD>
-                  <TD><PayBadge status={c.paymentStatus}/></TD>
-                  <TD style={{fontSize:12}}>{seller?<div style={{display:"flex",alignItems:"center",gap:6}}><Av name={seller.name} size={22} color={T.cyan}/>{seller.name}</div>:<span style={{color:T.muted}}>—</span>}</TD>
-                  <TD>{instr?<div><div style={{display:"flex",alignItems:"center",gap:6,fontSize:12}}><Av name={instr.name} size={22} color={T.purple}/>{instr.name}</div><InstrBadge status={c.instructorStatus}/></div>:<InstrBadge status="unassigned"/>}</TD>
-                  <TD style={{fontFamily:"monospace",color:T.accent,fontWeight:700}}>{fmt(staffE)}</TD>
-                  <TD><Badge text={c.isSettled?"LIQ.":"PEND."} color={c.isSettled?T.muted:T.gold} small dot={!c.isSettled}/></TD>
-                  <TD><div style={{display:"flex",gap:6}}><Btn variant="ghost" size="sm" onClick={()=>onEdit(c)}>✎</Btn><Btn variant="danger" size="sm" onClick={()=>{if(window.confirm("¿Eliminar esta clase?"))onDelete(c.id)}}>✕</Btn></div></TD>
-                </tr>
+                <Fragment key={gid}>
+                  <tr style={{background:`${T.accent}08`,borderLeft:`3px solid ${lb}`,cursor:"pointer"}} onClick={()=>toggleGroup(gid)}>
+                    <TD style={{fontSize:12,color:T.textDim,whiteSpace:"nowrap"}}>{expanded?"▼":"▶"} {fmtDate(gclasses.reduce((a,c)=>c.classDate<a?c.classDate:a,gclasses[0].classDate))}</TD>
+                    <TD><Badge text={`${gclasses.length} días`} color={T.accent} small/></TD>
+                    <TD><span style={{color:T.accent,fontWeight:700,fontSize:13}}>{client?.clientName}</span>{client?.notes&&<div style={{fontSize:11,color:T.textDim,maxWidth:140,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{client.notes}</div>}</TD>
+                    <TD>
+                      <div style={{fontFamily:"monospace",fontWeight:800}}>{fmt(gTotal)}</div>
+                      <div style={{fontFamily:"monospace",fontSize:11,color:T.green}}>{fmt(gPaid)} cobrado</div>
+                      <PayBar amount={gTotal} paidAmount={gPaid}/>
+                    </TD>
+                    <TD><PayBadge status={worstStatus}/></TD>
+                    <TD colSpan={3} style={{fontSize:11,color:T.textDim}}>Saldo: <strong style={{color:gSaldo>0?T.orange:T.green}}>{fmt(gSaldo)}</strong></TD>
+                    <TD><Badge text={gclasses.every(c=>c.isSettled)?"LIQ.":"PEND."} color={gclasses.every(c=>c.isSettled)?T.muted:T.gold} small dot={!gclasses.every(c=>c.isSettled)}/></TD>
+                    <TD onClick={e=>e.stopPropagation()}>
+                      <div style={{display:"flex",gap:4}}>
+                        {onGroupPayment&&<Btn variant="primary" size="sm" onClick={()=>setGroupPayModal({groupId:gid,groupClasses:gclasses})}>$ Pago</Btn>}
+                        {onUngroupClasses&&<Btn variant="ghost" size="sm" onClick={()=>{if(window.confirm("¿Desagrupar estas clases?"))onUngroupClasses(gid)}}>Desagrupar</Btn>}
+                      </div>
+                    </TD>
+                  </tr>
+                  {expanded&&gclasses.sort((a,b)=>a.classDate.localeCompare(b.classDate)).map(c=><ClassRow key={c.id} c={c} indent/>)}
+                </Fragment>
               );
             })}
+            {ungrouped.map(c=>(
+              <tr key={c.id} style={{borderLeft:`3px solid ${(c.paymentStatus==="reserved"?T.gold:c.paymentStatus==="partial"?T.orange:T.green)}40`}}>
+                <TD style={{fontSize:12,color:T.textDim,whiteSpace:"nowrap"}}>
+                  {onGroupClasses&&<input type="checkbox" checked={selected.has(c.id)} onChange={()=>toggleSelect(c.id)} style={{marginRight:6,accentColor:T.accent,cursor:"pointer"}} onClick={e=>e.stopPropagation()}/>}
+                  {fmtDate(c.classDate)}
+                </TD>
+                <TD><Badge text={c.classTypeName||"—"} color={T.muted} small/><Badge text={c.discipline==="snowboard"?"🏂 Snowboard":"🎿 Esquí"} color={c.discipline==="snowboard"?T.purple:T.cyan} small/></TD>
+                <TD><button onClick={()=>onClientClick(c.clientId,c.clientName)} style={{background:"none",border:"none",color:T.accent,fontWeight:700,fontSize:13,cursor:"pointer",padding:0,fontFamily:"inherit",textDecoration:"underline"}}>{c.clientName}</button>{c.notes&&<div style={{fontSize:11,color:T.textDim,maxWidth:140,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.notes}</div>}</TD>
+                <TD><div style={{fontFamily:"monospace",fontWeight:800}}>{fmt(c.amount)}</div><button onClick={()=>onFinanceClick(c)} style={{background:"none",border:"none",color:PAY_STATUS[c.paymentStatus]?.color,fontSize:11,cursor:"pointer",padding:0,fontFamily:"monospace",fontWeight:600,textDecoration:"underline"}}>{fmt(c.paidAmount)} ▸</button><PayBar amount={c.amount} paidAmount={c.paidAmount}/></TD>
+                <TD><PayBadge status={c.paymentStatus}/></TD>
+                <TD style={{fontSize:12}}>{staff.find(s=>s.id===c.sellerId)?<div style={{display:"flex",alignItems:"center",gap:6}}><Av name={staff.find(s=>s.id===c.sellerId).name} size={22} color={T.cyan}/>{staff.find(s=>s.id===c.sellerId).name}</div>:<span style={{color:T.muted}}>—</span>}</TD>
+                <TD>{staff.find(s=>s.id===c.instructorId)?<div><div style={{display:"flex",alignItems:"center",gap:6,fontSize:12}}><Av name={staff.find(s=>s.id===c.instructorId).name} size={22} color={T.purple}/>{staff.find(s=>s.id===c.instructorId).name}</div><InstrBadge status={c.instructorStatus}/></div>:<InstrBadge status="unassigned"/>}</TD>
+                <TD style={{fontFamily:"monospace",color:T.accent,fontWeight:700}}>{fmt((c.sellerCommission||0)+(c.instructorEarning||0))}</TD>
+                <TD><Badge text={c.isSettled?"LIQ.":"PEND."} color={c.isSettled?T.muted:T.gold} small dot={!c.isSettled}/></TD>
+                <TD><div style={{display:"flex",gap:6}}>{onEdit&&<Btn variant="ghost" size="sm" onClick={()=>onEdit(c)}>✎</Btn>}{onDelete&&<Btn variant="danger" size="sm" onClick={()=>{if(window.confirm("¿Eliminar esta clase?"))onDelete(c.id)}}>✕</Btn>}</div></TD>
+              </tr>
+            ))}
             {filtered.length===0&&<tr><td colSpan={10}><Empty text="No hay clases con estos filtros"/></td></tr>}
           </tbody>
         </table>
