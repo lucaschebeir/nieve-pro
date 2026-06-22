@@ -277,7 +277,7 @@ function ClientDetailCard({client,allClasses,staff,onBack,backLabel,isAdmin=true
 }
 
 // ─── MODAL: CLASE ──────────────────────────────────────────────────────────────
-function ModalClassEdit({data,staff,clients,config,onSave,onClose}){
+function ModalClassEdit({data,staff,clients,classes,config,onSave,onClose}){
   const isNew=!data;
   // IDs definidos antes del useState para poder usarlos en el valor inicial
   const _fullDayId = config.rates.find(r=>r.name==="Full Day")?.id;
@@ -296,6 +296,7 @@ function ModalClassEdit({data,staff,clients,config,onSave,onClose}){
   const [preview,setPreview]=useState(null);
   const [classDates, setClassDates] = useState(data ? [data.classDate] : [today]);
   const [totalDeposit, setTotalDeposit] = useState("");
+  const [selectedGroupId, setSelectedGroupId] = useState(null);
   const [saving,setSaving]=useState(false);
   const [unavailWarn,setUnavailWarn]=useState([]);
 
@@ -311,6 +312,22 @@ function ModalClassEdit({data,staff,clients,config,onSave,onClose}){
 
   const sellers=staff.filter(s=>(s.role==="seller"||s.role==="both")&&s.isActive);
   const instructors=staff.filter(s=>(s.role==="instructor"||s.role==="both")&&s.isActive);
+
+  // Grupos existentes del cliente seleccionado (solo para clases nuevas)
+  const clientGroups=useMemo(()=>{
+    if(!isNew||!form.clientId) return [];
+    const seen=new Set();
+    const result=[];
+    for(const c of (classes||[])){
+      if(c.clientId!==form.clientId||!c.groupId||seen.has(c.groupId)) continue;
+      seen.add(c.groupId);
+      const groupClasses=(classes||[]).filter(x=>x.groupId===c.groupId);
+      const dates=groupClasses.map(x=>x.classDate).sort();
+      result.push({groupId:c.groupId,label:`${fmtDate(dates[0])}${dates.length>1?` + ${dates.length-1} más`:""} (${groupClasses.length} clase${groupClasses.length!==1?"s":""})`});
+    }
+    return result;
+  },[isNew,form.clientId,classes]);
+
   const payStatus=form.paidAmount>0?(+form.paidAmount>=(+form.amount)?'paid':'partial'):'reserved';
   const ps=PAY_STATUS[payStatus];
   const saldo=Math.max(0,(+form.amount||0)-(+form.paidAmount||0));
@@ -339,7 +356,7 @@ function ModalClassEdit({data,staff,clients,config,onSave,onClose}){
     if(form.classTypeId===_halfDayId&&!form.horarioInicio){ alert("Elegí el turno del Half Day: Mañana o Tarde."); return; }
     setSaving(true);
     try {
-      const groupId = isNew && classDates.length > 1 ? crypto.randomUUID() : (data?.groupId || null);
+      const groupId = selectedGroupId || (isNew && classDates.length > 1 ? crypto.randomUUID() : (data?.groupId || null));
       const depositNum = +totalDeposit || 0;
       const n = classDates.length;
       const base = isNew && n > 1 && totalDeposit ? Math.round(depositNum / n * 100) / 100 : null;
@@ -402,7 +419,10 @@ function ModalClassEdit({data,staff,clients,config,onSave,onClose}){
   const n=Math.max(1,+v||1);
   setClassDates(Array.from({length:n},(_,i)=>classDates[i]||today));
 }}/>
-          <Inp label="Cliente existente (opc.)" value={form.clientId} onChange={v=>set("clientId",v)} options={clients.map(c=>({value:c.id,label:c.name}))}/>
+          <Inp label="Cliente existente (opc.)" value={form.clientId} onChange={v=>{set("clientId",v);setSelectedGroupId(null);}} options={clients.map(c=>({value:c.id,label:c.name}))}/>
+          {isNew&&clientGroups.length>0&&(
+            <Inp label="Agregar a grupo existente (opc.)" value={selectedGroupId||""} onChange={v=>setSelectedGroupId(v||null)} options={[{value:"",label:"— Nuevo grupo —"},...clientGroups.map(g=>({value:g.groupId,label:g.label}))]}/>
+          )}
           <Inp label="Nombre Cliente / Familia" value={form.clientName} onChange={v=>set("clientName",v)} placeholder="Familia Johnson" required/>
           <Inp label="Notas / Teléfono / Familiares" value={form.notes} onChange={v=>set("notes",v)} textarea placeholder="+54 9... | Juan y María"/>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
@@ -875,7 +895,7 @@ function AdminApp() {
         {page==="config"   &&<ConfigPage config={config} onSave={async (c)=>{await saveConfig(c);showToast("✓ Configuración guardada");}} staff={staff} onSaveStaff={handleSaveStaff}/>}
       </div>
       {/* MODALS */}
-      {modal?.type==="class_edit"   &&<ModalClassEdit data={modal.data} staff={staff} clients={clients} config={config} onSave={handleSaveClass} onClose={()=>setModal(null)}/>}
+      {modal?.type==="class_edit"   &&<ModalClassEdit data={modal.data} staff={staff} clients={clients} classes={enrichedClasses} config={config} onSave={handleSaveClass} onClose={()=>setModal(null)}/>}
       {modal?.type==="class_finance"&&<ClassFinanceModal cls={modal.data} staff={staff} onClose={()=>setModal(null)}/>}
       {modal?.type==="settle"       &&<ModalSettle name={modal.data.name} staffId={modal.data.staffId} balance={getBalance(modal.data.staffId)} onConfirm={handleSettle} onClose={()=>setModal(null)}/>}
       {modal?.type==="client_edit"  &&<ModalClientEdit data={modal.data} staff={staff} clients={clients} onSave={handleSaveClient} onClose={()=>setModal(null)}/>}
