@@ -294,13 +294,13 @@ function ModalClassEdit({data,staff,clients,config,onSave,onClose}){
   const empty={classDate:today,classTypeId:"",classTypeName:"",amount:"550",peopleCount:"1",sellerId:"",instructorId:"",clientId:"",clientName:"",notes:"",reservationAmount:"",paidAmount:"",classDone:false,discipline:"ski",horarioInicio:""};
   const [form,setForm]=useState(data?{...data,amount:String(data.amount),peopleCount:String(data.peopleCount),reservationAmount:String(data.reservationAmount||0),paidAmount:String(data.paidAmount||0),sellerId:data.sellerId||"",instructorId:data.instructorId||"",clientId:data.clientId||"",horarioInicio:autoHorario(data.classTypeId,data.horarioInicio)}:empty);
   const [preview,setPreview]=useState(null);
-  const [classDates, setClassDates] = useState([today]);
+  const [classDates, setClassDates] = useState(data ? [data.classDate] : [today]);
   const [saving,setSaving]=useState(false);
   const [unavailWarn,setUnavailWarn]=useState([]);
 
   useEffect(()=>{
     if(!form.instructorId){ setUnavailWarn([]); return; }
-    const datesToCheck = isNew ? classDates : [form.classDate];
+    const datesToCheck = classDates;
     supabase.from("instructor_unavailability")
       .select("date,hora_inicio,hora_fin")
       .eq("staff_id",form.instructorId)
@@ -338,7 +338,7 @@ function ModalClassEdit({data,staff,clients,config,onSave,onClose}){
     if(form.classTypeId===_halfDayId&&!form.horarioInicio){ alert("Elegí el turno del Half Day: Mañana o Tarde."); return; }
     setSaving(true);
     try {
-      for (const date of (isNew ? classDates : [form.classDate])) {
+      for (const date of classDates) {
         await onSave({...form, id: isNew?undefined:data?.id, classDate: date});
       }
     }
