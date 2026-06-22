@@ -340,11 +340,15 @@ function ModalClassEdit({data,staff,clients,config,onSave,onClose}){
     setSaving(true);
     try {
       const groupId = isNew && classDates.length > 1 ? crypto.randomUUID() : (data?.groupId || null);
-      const perClassDeposit = isNew && classDates.length > 1 && totalDeposit
-        ? String(+totalDeposit / classDates.length)
-        : form.reservationAmount;
-      for (const date of classDates) {
-        await onSave({...form, id: isNew?undefined:data?.id, classDate: date, groupId, reservationAmount: perClassDeposit});
+      const depositNum = +totalDeposit || 0;
+      const n = classDates.length;
+      const base = isNew && n > 1 && totalDeposit ? Math.round(depositNum / n * 100) / 100 : null;
+      for (let i = 0; i < classDates.length; i++) {
+        const deposit = base !== null
+          ? (i === n - 1 ? Math.round((depositNum - base * (n - 1)) * 100) / 100 : base)
+          : null;
+        const reservationAmount = deposit !== null ? String(deposit) : form.reservationAmount;
+        await onSave({...form, id: isNew?undefined:data?.id, classDate: classDates[i], groupId, reservationAmount});
       }
     }
     catch(e){ alert("Error guardando: "+e.message); }
