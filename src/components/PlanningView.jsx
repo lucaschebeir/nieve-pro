@@ -848,6 +848,32 @@ const PAY_INFO = {
 export function PlanningInstructorView({ classes, staffMember, staff = [] }) {
   const [anchorDate, setAnchorDate] = useState(todayStr());
   const [unavailByDate, setUnavailByDate] = useState(new Map());
+  const [groupMatesMap, setGroupMatesMap] = useState({});
+
+  useEffect(() => {
+    if (!staffMember?.id) return;
+    const myGroupIds = [...new Set(
+      classes.filter(c => c.instructorId === staffMember.id && c.groupId).map(c => c.groupId)
+    )];
+    if (myGroupIds.length === 0) return;
+    supabase
+      .from("classes")
+      .select("group_id, instructor:instructor_id(name)")
+      .in("group_id", myGroupIds)
+      .neq("instructor_id", staffMember.id)
+      .not("instructor_id", "is", null)
+      .then(({ data }) => {
+        if (!data) return;
+        const map = {};
+        data.forEach(row => {
+          if (!map[row.group_id]) map[row.group_id] = new Set();
+          if (row.instructor?.name) map[row.group_id].add(row.instructor.name);
+        });
+        setGroupMatesMap(Object.fromEntries(
+          Object.entries(map).map(([k, v]) => [k, [...v]])
+        ));
+      });
+  }, [staffMember?.id, classes]);
 
   const weekDays = getWeekDays(anchorDate);
 
@@ -873,14 +899,7 @@ export function PlanningInstructorView({ classes, staffMember, staff = [] }) {
     const endStr   = startMin != null ? fmtTime(minToTime(startMin + classDuration(c))) : null;
     const isOwn    = c.scenario === "own_class";
     const pay      = PAY_INFO[c.paymentStatus] ?? PAY_INFO.reserved;
-    const groupMates = c.groupId
-      ? [...new Set(
-          classes
-            .filter(o => o.groupId === c.groupId && o.instructorId && o.instructorId !== staffMember?.id)
-            .map(o => staff.find(s => s.id === o.instructorId)?.name)
-            .filter(Boolean)
-        )]
-      : [];
+    const groupMates = c.groupId ? (groupMatesMap[c.groupId] || []) : [];
     return (
       <div style={{ background: T.card, border: `1px solid ${T.border}`,
         borderLeft: `4px solid ${color}`, borderRadius: 12, padding: "14px 16px",
