@@ -855,24 +855,16 @@ export function PlanningInstructorView({ classes, staffMember, staff = [] }) {
     const myGroupIds = [...new Set(
       classes.filter(c => c.instructorId === staffMember.id && c.groupId).map(c => c.groupId)
     )];
-    if (myGroupIds.length === 0) return;
-    supabase
-      .from("classes")
-      .select("group_id, instructor:instructor_id(name)")
-      .in("group_id", myGroupIds)
-      .neq("instructor_id", staffMember.id)
-      .not("instructor_id", "is", null)
-      .then(({ data }) => {
-        if (!data) return;
-        const map = {};
-        data.forEach(row => {
-          if (!map[row.group_id]) map[row.group_id] = new Set();
-          if (row.instructor?.name) map[row.group_id].add(row.instructor.name);
-        });
-        setGroupMatesMap(Object.fromEntries(
-          Object.entries(map).map(([k, v]) => [k, [...v]])
-        ));
-      });
+    if (myGroupIds.length === 0) { setGroupMatesMap({}); return; }
+    Promise.all(
+      myGroupIds.map(gid =>
+        supabase
+          .rpc("get_group_instructor_names", { p_group_id: gid, p_exclude_staff_id: staffMember.id })
+          .then(({ data }) => [gid, (data || []).filter(Boolean)])
+      )
+    ).then(entries => {
+      setGroupMatesMap(Object.fromEntries(entries.filter(([, v]) => v.length > 0)));
+    });
   }, [staffMember?.id, classes]);
 
   const weekDays = getWeekDays(anchorDate);
