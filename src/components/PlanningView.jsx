@@ -845,7 +845,7 @@ const PAY_INFO = {
   paid:     { label: "Pago Total",   color: T.green  },
 };
 
-export function PlanningInstructorView({ classes, staffMember }) {
+export function PlanningInstructorView({ classes, staffMember, staff = [] }) {
   const [anchorDate, setAnchorDate] = useState(todayStr());
   const [unavailByDate, setUnavailByDate] = useState(new Map());
 
@@ -873,6 +873,14 @@ export function PlanningInstructorView({ classes, staffMember }) {
     const endStr   = startMin != null ? fmtTime(minToTime(startMin + classDuration(c))) : null;
     const isOwn    = c.scenario === "own_class";
     const pay      = PAY_INFO[c.paymentStatus] ?? PAY_INFO.reserved;
+    const groupMates = c.groupId
+      ? [...new Set(
+          classes
+            .filter(o => o.groupId === c.groupId && o.instructorId && o.instructorId !== staffMember?.id)
+            .map(o => staff.find(s => s.id === o.instructorId)?.name)
+            .filter(Boolean)
+        )]
+      : [];
     return (
       <div style={{ background: T.card, border: `1px solid ${T.border}`,
         borderLeft: `4px solid ${color}`, borderRadius: 12, padding: "14px 16px",
@@ -930,6 +938,12 @@ export function PlanningInstructorView({ classes, staffMember }) {
         {c.horarioInicio && (
           <div style={{ fontSize: 11, color: T.muted }}>
             Duración: {Math.round(classDuration(c) / 60 * 10) / 10}hs
+          </div>
+        )}
+        {groupMates.length > 0 && (
+          <div style={{ fontSize: 11, color: T.cyan, background: `${T.cyan}10`,
+            border: `1px solid ${T.cyan}30`, borderRadius: 7, padding: "5px 10px" }}>
+            👥 Instructores en esta reserva: {groupMates.join(", ")}
           </div>
         )}
       </div>
