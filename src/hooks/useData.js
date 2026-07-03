@@ -251,7 +251,7 @@ export function useClasses() {
     schoolCut:           c.school_cut,
     isSettled:           c.is_settled,
     settlementId:        c.settlement_id,
-    horarioInicio:       c.horario_inicio ?? null,
+    horarioInicio:       c.horario_inicio ? c.horario_inicio.slice(0, 5) : null,
     createdAt:           c.created_at?.split("T")[0],
     groupId:             c.group_id || null,
   }));
