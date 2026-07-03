@@ -737,8 +737,11 @@ function PlanningAdminView({ classes, staff, onUpdate, onEdit, onDelete, initial
       return;
     }
 
-    const snapped = snapTo30(clampStart(startMin, dur));
-    resolveAndSave(cls, instrId, snapped, dur);
+    // Primera asignación y ya tiene horario definido → respetar el horario existente
+    const resolvedStart = (!cls.instructorId && cls.horarioInicio)
+      ? timeToMin(cls.horarioInicio)
+      : snapTo30(clampStart(startMin, dur));
+    resolveAndSave(cls, instrId, resolvedStart, dur);
   }
 
   function resolveAndSave(cls, instrId, startMin, dur) {
@@ -805,15 +808,27 @@ function PlanningAdminView({ classes, staff, onUpdate, onEdit, onDelete, initial
         </div>
       )}
 
-      {/* UNASSIGNED */}
-      <UnassignedBucket classes={unassigned} date={selectedDate} onEdit={onEdit} onDelete={onDelete} />
-
       {/* GRILLA */}
       <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14,
         padding: "16px 20px", overflowX: "auto" }}>
         <div style={{ minWidth: TIMELINE_W + 148 }}>
           <TimeAxisHeader pxPerMin={pxPerMin} />
           <div style={{ marginTop: 6 }}>
+            {/* Fila sin asignar — solo clases con horario definido */}
+            {unassigned.filter(c => c.horarioInicio).length > 0 && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0",
+                borderBottom: `1px solid ${T.border}30` }}>
+                <div style={{ width: 132, flexShrink: 0 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: T.red }}>⚠ Sin asignar</span>
+                </div>
+                <TimelineDropArea instrId={null} date={selectedDate}>
+                  {unassigned.filter(c => c.horarioInicio).map(c => (
+                    <ClassBlock key={c.id} cls={c} pxPerMin={pxPerMin} color={T.red}
+                      onEdit={onEdit} onDelete={onDelete} />
+                  ))}
+                </TimelineDropArea>
+              </div>
+            )}
             {instructors.map(instr => (
               <InstructorRow
                 key={instr.id}
@@ -836,6 +851,11 @@ function PlanningAdminView({ classes, staff, onUpdate, onEdit, onDelete, initial
           </div>
         </div>
       </div>
+
+      {/* CHIPS — clases sin asignar y sin horario */}
+      {unassigned.filter(c => !c.horarioInicio).length > 0 && (
+        <UnassignedBucket classes={unassigned.filter(c => !c.horarioInicio)} date={selectedDate} onEdit={onEdit} onDelete={onDelete} />
+      )}
 
       {/* HALF DAY MODAL */}
       {halfDayPending && (
