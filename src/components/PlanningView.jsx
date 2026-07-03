@@ -833,7 +833,7 @@ function PlanningAdminView({ classes, staff, onUpdate, onEdit, onDelete, initial
             {(() => {
               const withTime = unassigned.filter(c => c.horarioInicio);
               if (withTime.length === 0) return null;
-              const LANE_H = 40;
+              const LANE_H = 72;
               const { assignments, laneCount } = assignLanes(withTime);
               const rowH = laneCount * LANE_H + 8;
               return (
