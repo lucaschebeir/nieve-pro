@@ -288,7 +288,7 @@ function DraggableChip({ cls, color, onEdit, onDelete }) {
 }
 
 // ─── DRAGGABLE CLASS BLOCK (bloque en la línea de tiempo) ────────────────────
-function ClassBlock({ cls, pxPerMin, color, onEdit, onDelete, blockTop, blockHeight }) {
+function ClassBlock({ cls, pxPerMin, color, onEdit, onDelete, blockTop, blockHeight, alwaysShowBadge }) {
   const startMin = timeToMin(cls.horarioInicio);
   const dur = classDuration(cls);
   const left = (startMin - DAY_START_MIN) * pxPerMin;
@@ -315,7 +315,7 @@ function ClassBlock({ cls, pxPerMin, color, onEdit, onDelete, blockTop, blockHei
           {fmtTime(cls.horarioInicio)} – {endStr}
         </div>
       )}
-      {width > 110 && (
+      {(width > 110 || alwaysShowBadge) && (
         <div style={{ display: "flex", alignItems: "center", gap: 3, flexWrap: "nowrap", overflow: "hidden" }}>
           {cls.classTypeName && (
             <span style={{ fontSize: 9, color: T.white, opacity: 0.85, whiteSpace: "nowrap",
@@ -833,7 +833,7 @@ function PlanningAdminView({ classes, staff, onUpdate, onEdit, onDelete, initial
             {(() => {
               const withTime = unassigned.filter(c => c.horarioInicio);
               if (withTime.length === 0) return null;
-              const LANE_H = 28;
+              const LANE_H = 40;
               const { assignments, laneCount } = assignLanes(withTime);
               const rowH = laneCount * LANE_H + 8;
               return (
@@ -846,7 +846,8 @@ function PlanningAdminView({ classes, staff, onUpdate, onEdit, onDelete, initial
                     {assignments.map(({ cls, lane }) => (
                       <ClassBlock key={cls.id} cls={cls} pxPerMin={pxPerMin} color={T.red}
                         onEdit={onEdit} onDelete={onDelete}
-                        blockTop={4 + lane * LANE_H} blockHeight={LANE_H - 4} />
+                        blockTop={4 + lane * LANE_H} blockHeight={LANE_H - 4}
+                        alwaysShowBadge />
                     ))}
                   </TimelineDropArea>
                 </div>
