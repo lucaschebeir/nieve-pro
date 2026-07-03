@@ -156,6 +156,17 @@ function classColor(cls) {
   return TYPE_COLORS[cls.classTypeId] ?? T.muted;
 }
 
+function DiscBadge({ discipline, size = 9 }) {
+  const isSb = discipline === "snowboard";
+  return (
+    <span style={{ background: isSb ? T.orange : T.accent, color: T.white,
+      fontSize: size, fontWeight: 700, padding: "1px 5px", borderRadius: 4,
+      whiteSpace: "nowrap", flexShrink: 0 }}>
+      {isSb ? "🏂 Snowboard" : "🎿 Ski"}
+    </span>
+  );
+}
+
 // ─── COMPONENTES BASE ─────────────────────────────────────────────────────────
 function Av({ name = "?", size = 28, color = T.accent }) {
   const i = name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
@@ -237,7 +248,10 @@ function DraggableChip({ cls, color, onEdit, onDelete }) {
       <div {...listeners} {...attributes} style={{ cursor: "grab" }}>
         <span style={{ fontWeight: 700, color, whiteSpace: "nowrap", overflow: "hidden",
           textOverflow: "ellipsis", maxWidth: 120, display: "block" }}>{cls.clientName}</span>
-        <span style={{ color: T.textDim }}>{cls.classTypeName || "—"} · {durLabel}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap", marginTop: 2 }}>
+          <span style={{ color: T.textDim, fontSize: 10 }}>{cls.classTypeName || "—"} · {durLabel}</span>
+          <DiscBadge discipline={cls.discipline} />
+        </div>
       </div>
       {/* Botones — stopPropagation en pointerDown para no activar drag */}
       <div style={{ position: "absolute", top: 3, right: 3, display: "flex", gap: 2 }}>
@@ -286,9 +300,14 @@ function ClassBlock({ cls, pxPerMin, color, onEdit, onDelete }) {
           {fmtTime(cls.horarioInicio)} – {endStr}
         </div>
       )}
-      {width > 110 && cls.classTypeName && (
-        <div style={{ fontSize: 9, color, opacity: 0.7, whiteSpace: "nowrap",
-          overflow: "hidden", textOverflow: "ellipsis" }}>{cls.classTypeName}</div>
+      {width > 110 && (
+        <div style={{ display: "flex", alignItems: "center", gap: 3, flexWrap: "nowrap", overflow: "hidden" }}>
+          {cls.classTypeName && (
+            <span style={{ fontSize: 9, color: T.white, opacity: 0.85, whiteSpace: "nowrap",
+              overflow: "hidden", textOverflow: "ellipsis" }}>{cls.classTypeName}</span>
+          )}
+          <DiscBadge discipline={cls.discipline} size={8} />
+        </div>
       )}
       {/* Botones editar / eliminar */}
       {(onEdit || onDelete) && (
@@ -786,6 +805,9 @@ function PlanningAdminView({ classes, staff, onUpdate, onEdit, onDelete, initial
         </div>
       )}
 
+      {/* UNASSIGNED */}
+      <UnassignedBucket classes={unassigned} date={selectedDate} onEdit={onEdit} onDelete={onDelete} />
+
       {/* GRILLA */}
       <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14,
         padding: "16px 20px", overflowX: "auto" }}>
@@ -814,9 +836,6 @@ function PlanningAdminView({ classes, staff, onUpdate, onEdit, onDelete, initial
           </div>
         </div>
       </div>
-
-      {/* UNASSIGNED */}
-      <UnassignedBucket classes={unassigned} date={selectedDate} onEdit={onEdit} onDelete={onDelete} />
 
       {/* HALF DAY MODAL */}
       {halfDayPending && (
@@ -1066,7 +1085,10 @@ function WeekCell({ classes, onEdit, showInstructor, staff }) {
             )}
             <div style={{ fontWeight: 700, color: T.text, overflow: "hidden",
               textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.clientName || "—"}</div>
-            <div style={{ color, fontSize: 9 }}>{c.classTypeName || "—"}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 3, flexWrap: "wrap", marginTop: 1 }}>
+              <span style={{ color: T.white, fontSize: 9 }}>{c.classTypeName || "—"}</span>
+              <DiscBadge discipline={c.discipline} size={8} />
+            </div>
             {instr && <div style={{ color: T.textDim, fontSize: 9 }}>👤 {instr.name}</div>}
           </div>
         );
