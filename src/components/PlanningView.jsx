@@ -156,6 +156,20 @@ function classColor(cls) {
   return TYPE_COLORS[cls.classTypeId] ?? T.muted;
 }
 
+function assignLanes(classes) {
+  const sorted = [...classes].sort((a, b) => timeToMin(a.horarioInicio) - timeToMin(b.horarioInicio));
+  const laneEnds = [];
+  const result = sorted.map(cls => {
+    const start = timeToMin(cls.horarioInicio);
+    const end = start + classDuration(cls);
+    const lane = laneEnds.findIndex(e => e <= start);
+    if (lane === -1) { laneEnds.push(end); return { cls, lane: laneEnds.length - 1 }; }
+    laneEnds[lane] = end;
+    return { cls, lane };
+  });
+  return { assignments: result, laneCount: laneEnds.length };
+}
+
 function DiscBadge({ discipline, size = 9 }) {
   const isSb = discipline === "snowboard";
   return (
@@ -274,7 +288,7 @@ function DraggableChip({ cls, color, onEdit, onDelete }) {
 }
 
 // ─── DRAGGABLE CLASS BLOCK (bloque en la línea de tiempo) ────────────────────
-function ClassBlock({ cls, pxPerMin, color, onEdit, onDelete }) {
+function ClassBlock({ cls, pxPerMin, color, onEdit, onDelete, blockTop, blockHeight }) {
   const startMin = timeToMin(cls.horarioInicio);
   const dur = classDuration(cls);
   const left = (startMin - DAY_START_MIN) * pxPerMin;
@@ -286,7 +300,8 @@ function ClassBlock({ cls, pxPerMin, color, onEdit, onDelete }) {
   return (
     <div ref={setNodeRef} {...listeners} {...attributes}
       title={`${cls.clientName} · ${fmtTime(cls.horarioInicio)} – ${endStr}`}
-      style={{ position: "absolute", left, width, top: 5, bottom: 5,
+      style={{ position: "absolute", left, width,
+        top: blockTop ?? 5, ...(blockHeight ? { height: blockHeight } : { bottom: 5 }),
         background: `${color}22`, border: `2px solid ${color}80`, borderRadius: 8,
         cursor: "grab", opacity: isDragging ? 0.3 : 1, overflow: "hidden",
         padding: "5px 7px", boxSizing: "border-box", touchAction: "none",
@@ -332,12 +347,12 @@ function ClassBlock({ cls, pxPerMin, color, onEdit, onDelete }) {
 }
 
 // ─── DROPPABLE TIMELINE AREA ──────────────────────────────────────────────────
-function TimelineDropArea({ instrId, date, children }) {
+function TimelineDropArea({ instrId, date, children, height = 80 }) {
   const dropId = `timeline-${instrId}-${date}`;
   const { setNodeRef, isOver } = useDroppable({ id: dropId, data: { instrId, date, type: "timeline" } });
   return (
     <div ref={setNodeRef} id={dropId}
-      style={{ position: "relative", height: 80, flex: 1,
+      style={{ position: "relative", height, flex: 1,
         background: isOver ? `${T.accent}10` : `${T.surface}30`,
         border: isOver ? `1px dashed ${T.accent}70` : `1px solid ${T.border}50`,
         borderRadius: 8, transition: "background .15s", overflow: "visible" }}>
@@ -814,21 +829,29 @@ function PlanningAdminView({ classes, staff, onUpdate, onEdit, onDelete, initial
         <div style={{ minWidth: TIMELINE_W + 148 }}>
           <TimeAxisHeader pxPerMin={pxPerMin} />
           <div style={{ marginTop: 6 }}>
-            {/* Fila sin asignar — solo clases con horario definido */}
-            {unassigned.filter(c => c.horarioInicio).length > 0 && (
-              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0",
-                borderBottom: `1px solid ${T.border}30` }}>
-                <div style={{ width: 132, flexShrink: 0 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: T.red }}>⚠ Sin asignar</span>
+            {/* Fila sin asignar — solo clases con horario definido, en carriles */}
+            {(() => {
+              const withTime = unassigned.filter(c => c.horarioInicio);
+              if (withTime.length === 0) return null;
+              const LANE_H = 28;
+              const { assignments, laneCount } = assignLanes(withTime);
+              const rowH = laneCount * LANE_H + 8;
+              return (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0",
+                  borderBottom: `1px solid ${T.border}30` }}>
+                  <div style={{ width: 132, flexShrink: 0 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: T.red }}>⚠ Sin asignar</span>
+                  </div>
+                  <TimelineDropArea instrId={null} date={selectedDate} height={rowH}>
+                    {assignments.map(({ cls, lane }) => (
+                      <ClassBlock key={cls.id} cls={cls} pxPerMin={pxPerMin} color={T.red}
+                        onEdit={onEdit} onDelete={onDelete}
+                        blockTop={4 + lane * LANE_H} blockHeight={LANE_H - 4} />
+                    ))}
+                  </TimelineDropArea>
                 </div>
-                <TimelineDropArea instrId={null} date={selectedDate}>
-                  {unassigned.filter(c => c.horarioInicio).map(c => (
-                    <ClassBlock key={c.id} cls={c} pxPerMin={pxPerMin} color={T.red}
-                      onEdit={onEdit} onDelete={onDelete} />
-                  ))}
-                </TimelineDropArea>
-              </div>
-            )}
+              );
+            })()}
             {instructors.map(instr => (
               <InstructorRow
                 key={instr.id}
