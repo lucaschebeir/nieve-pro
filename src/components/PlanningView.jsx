@@ -324,7 +324,7 @@ function ClassBlock({ cls, pxPerMin, color, onEdit, onDelete, blockTop, blockHei
           <DiscBadge discipline={cls.discipline} size={8} />
         </div>
       )}
-      {cls.notes && !alwaysShowBadge && (
+      {cls.notes && (
         <div style={{ fontSize: 9, color: T.textDim, marginTop: 1,
           overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2,
           WebkitBoxOrient: "vertical" }}>
