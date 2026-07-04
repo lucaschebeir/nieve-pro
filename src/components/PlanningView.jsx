@@ -1108,6 +1108,53 @@ export function PlanningInstructorView({ classes, staffMember, staff = [] }) {
 }
 
 // ─── PLANNING WEEK OVERVIEW (admin) ──────────────────────────────────────────
+function DraggableWeekCard({ c, onEdit }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: c.id, data: { cls: c } });
+  const color = T.red;
+  const startMin = timeToMin(c.horarioInicio);
+  const endStr = startMin != null ? fmtTime(minToTime(startMin + classDuration(c))) : null;
+  return (
+    <div ref={setNodeRef}
+      style={{ background: `${color}14`, border: `1px solid ${color}40`,
+        borderLeft: `3px solid ${color}`, borderRadius: 5, padding: "3px 6px",
+        fontSize: 10, opacity: isDragging ? 0.35 : 1, touchAction: "none",
+        position: "relative", marginBottom: 3 }}>
+      <div {...listeners} {...attributes} style={{ cursor: "grab" }}>
+        {c.horarioInicio && (
+          <div style={{ color: T.textDim, fontSize: 9 }}>
+            {fmtTime(c.horarioInicio)}{endStr ? `–${endStr}` : ""}
+          </div>
+        )}
+        <div style={{ fontWeight: 700, color: T.text, overflow: "hidden",
+          textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.clientName || "—"}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 3, flexWrap: "wrap", marginTop: 1 }}>
+          <span style={{ color: T.white, fontSize: 9 }}>{c.classTypeName || "—"}</span>
+          <DiscBadge discipline={c.discipline} size={8} />
+        </div>
+      </div>
+      {onEdit && (
+        <button onPointerDown={e => e.stopPropagation()} onClick={() => onEdit(c)}
+          style={{ position: "absolute", top: 2, right: 2, background: "none", border: "none",
+            color: T.textDim, cursor: "pointer", fontSize: 11, padding: "1px 3px" }}>✎</button>
+      )}
+    </div>
+  );
+}
+
+function DroppableWeekCell({ instrId, date, children }) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `week-drop-${instrId}-${date}`,
+    data: { instrId, date },
+  });
+  return (
+    <div ref={setNodeRef} style={{ minHeight: 52, background: isOver ? `${T.accent}12` : T.card,
+      outline: isOver ? `1px dashed ${T.accent}60` : "none",
+      transition: "background .15s" }}>
+      {children}
+    </div>
+  );
+}
+
 function WeekCell({ classes, onEdit, showInstructor, staff }) {
   const sorted = [...classes].sort((a, b) => (timeToMin(a.horarioInicio) ?? 9999) - (timeToMin(b.horarioInicio) ?? 9999));
   return (
@@ -1141,10 +1188,13 @@ function WeekCell({ classes, onEdit, showInstructor, staff }) {
   );
 }
 
-function PlanningWeekOverview({ classes, staff, onEdit }) {
+function PlanningWeekOverview({ classes, staff, onEdit, onUpdate }) {
   const [anchorDate, setAnchorDate] = useState(todayStr());
+  const [activeCls, setActiveCls] = useState(null);
   const weekDays = getWeekDays(anchorDate);
   const today = todayStr();
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   const instructors = useMemo(() => {
     const weekClasses = classes.filter(c => weekDays.includes(c.classDate));
@@ -1161,10 +1211,20 @@ function PlanningWeekOverview({ classes, staff, onEdit }) {
     classes.some(c => weekDays.includes(c.classDate) && !c.instructorId),
   [classes, weekDays]);
 
+  function handleDragEnd({ active, over }) {
+    setActiveCls(null);
+    if (!over || !onUpdate) return;
+    const { instrId, date } = over.data.current ?? {};
+    const cls = active.data.current?.cls;
+    if (!cls || !instrId || !date) return;
+    if (cls.classDate !== date) return;
+    onUpdate(cls.id, { instructorId: instrId });
+  }
+
   const COL = `140px repeat(7, minmax(110px, 1fr))`;
 
   return (
-    <div>
+    <DndContext sensors={sensors} onDragStart={({ active }) => setActiveCls(active.data.current?.cls ?? null)} onDragEnd={handleDragEnd}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
         <Btn variant="ghost" size="sm" onClick={() => setAnchorDate(d => addWeeks(d, -1))}>← Anterior</Btn>
         <span style={{ fontSize: 13, fontWeight: 700, color: T.text, flex: 1, textAlign: "center" }}>{fmtWeekRange(weekDays)}</span>
@@ -1189,7 +1249,7 @@ function PlanningWeekOverview({ classes, staff, onEdit }) {
             );
           })}
 
-          {/* Fila sin asignar */}
+          {/* Fila sin asignar — draggable */}
           {hasUnassigned && (
             <>
               <div style={{ background: `${T.red}10`, padding: "8px 10px", display: "flex", alignItems: "center" }}>
@@ -1198,15 +1258,15 @@ function PlanningWeekOverview({ classes, staff, onEdit }) {
               {weekDays.map(d => {
                 const cls = classes.filter(c => c.classDate === d && !c.instructorId);
                 return (
-                  <div key={d} style={{ background: cls.length ? `${T.red}06` : T.card }}>
-                    <WeekCell classes={cls} onEdit={onEdit} staff={staff} />
+                  <div key={d} style={{ background: cls.length ? `${T.red}06` : T.card, padding: 4 }}>
+                    {cls.map(c => <DraggableWeekCard key={c.id} c={c} onEdit={onEdit} />)}
                   </div>
                 );
               })}
             </>
           )}
 
-          {/* Filas por instructor */}
+          {/* Filas por instructor — droppable */}
           {instructors.map(instr => {
             const hasAny = weekDays.some(d => classes.some(c => c.classDate === d && c.instructorId === instr.id));
             return (
@@ -1217,9 +1277,9 @@ function PlanningWeekOverview({ classes, staff, onEdit }) {
                 {weekDays.map(d => {
                   const cls = classes.filter(c => c.classDate === d && c.instructorId === instr.id);
                   return (
-                    <div key={d} style={{ background: T.card }}>
+                    <DroppableWeekCell key={d} instrId={instr.id} date={d}>
                       <WeekCell classes={cls} onEdit={onEdit} staff={staff} />
-                    </div>
+                    </DroppableWeekCell>
                   );
                 })}
               </>
@@ -1227,7 +1287,10 @@ function PlanningWeekOverview({ classes, staff, onEdit }) {
           })}
         </div>
       </div>
-    </div>
+      <DragOverlay dropAnimation={null}>
+        {activeCls ? <DragPreview cls={activeCls} /> : null}
+      </DragOverlay>
+    </DndContext>
   );
 }
 
@@ -1337,7 +1400,7 @@ export default function PlanningView({ classes, staff, isAdmin, staffProfile, on
       {isAdmin ? (
         <>
           {viewType === "day"   && <PlanningAdminView key={dayTarget} classes={classes} staff={staff} onUpdate={onUpdate} onEdit={onEdit} onDelete={onDelete} initialDate={dayTarget} />}
-          {viewType === "week"  && <PlanningWeekOverview classes={classes} staff={staff} onEdit={onEdit} />}
+          {viewType === "week"  && <PlanningWeekOverview classes={classes} staff={staff} onEdit={onEdit} onUpdate={onUpdate} />}
           {viewType === "month" && <PlanningMonthOverview classes={classes} staff={staff} onEdit={onEdit} onSwitchToDay={switchToDay} />}
         </>
       ) : (
