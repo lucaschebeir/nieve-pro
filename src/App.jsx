@@ -1526,7 +1526,10 @@ function FinanzasPage({classes,expenses,staff,config,onAddExpense}){
     return a+hours*defaultHourlyRate;
   },0);
   const ingresosBrutos=filteredClasses.reduce((a,c)=>c.scenario==="own_class"?a+c.schoolCut:a+c.paidAmount,0);
-  const aCobrar=filteredClasses.reduce((a,c)=>c.scenario==="own_class"?a:a+(c.amount-c.paidAmount),0);
+  const aCobrar=filteredClasses.reduce((a,c)=>{
+    if(c.scenario==="own_class"&&c.schoolCut>0) return a; // staff regular own_class: excluido
+    return a+(c.amount-c.paidAmount);
+  },0);
   const ingresosProyectados=ingresosBrutos+aCobrar;
   const totalComisiones=filteredClasses.reduce((a,c)=>a+c.sellerCommission,0);
   const totalInstructores=filteredClasses.reduce((a,c)=>a+c.instructorEarning,0)+estimatedInstrCost;
