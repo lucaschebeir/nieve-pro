@@ -1189,7 +1189,7 @@ function WeekCell({ classes, onEdit, showInstructor, staff, draggable }) {
   );
 }
 
-function PlanningWeekOverview({ classes, staff, onEdit, onUpdate, initialDate, onDateChange }) {
+function PlanningWeekOverview({ classes, staff, onEdit, onUpdate, initialDate, onDateChange, onSwitchToDay }) {
   const [anchorDate, setAnchorDateRaw] = useState(initialDate ?? todayStr());
   const [activeCls, setActiveCls] = useState(null);
 
@@ -1248,7 +1248,9 @@ function PlanningWeekOverview({ classes, staff, onEdit, onUpdate, initialDate, o
             const isToday = d === today;
             const cnt = classes.filter(c => c.classDate === d).length;
             return (
-              <div key={d} style={{ background: isToday ? `${T.accent}20` : T.surface, padding: "7px 8px", textAlign: "center" }}>
+              <div key={d} onClick={() => onSwitchToDay?.(d)}
+                style={{ background: isToday ? `${T.accent}20` : T.surface, padding: "7px 8px", textAlign: "center",
+                  cursor: onSwitchToDay ? "pointer" : "default" }}>
                 <div style={{ fontSize: 11, fontWeight: 800, color: isToday ? T.accent : T.text, textTransform: "capitalize" }}>
                   {fmtDayHeader(d)}
                   {isToday && <span style={{ marginLeft: 4, background: T.accent, color: "#fff", fontSize: 8, padding: "1px 4px", borderRadius: 10 }}>HOY</span>}
@@ -1409,7 +1411,7 @@ export default function PlanningView({ classes, staff, isAdmin, staffProfile, on
       {isAdmin ? (
         <>
           {viewType === "day"   && <PlanningAdminView key={sharedDate} classes={classes} staff={staff} onUpdate={onUpdate} onEdit={onEdit} onDelete={onDelete} initialDate={sharedDate} />}
-          {viewType === "week"  && <PlanningWeekOverview classes={classes} staff={staff} onEdit={onEdit} onUpdate={onUpdate} initialDate={sharedDate} onDateChange={setSharedDate} />}
+          {viewType === "week"  && <PlanningWeekOverview classes={classes} staff={staff} onEdit={onEdit} onUpdate={onUpdate} initialDate={sharedDate} onDateChange={setSharedDate} onSwitchToDay={switchToDay} />}
           {viewType === "month" && <PlanningMonthOverview classes={classes} staff={staff} onEdit={onEdit} onSwitchToDay={switchToDay} />}
         </>
       ) : (
