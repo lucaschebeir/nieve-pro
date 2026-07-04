@@ -1450,7 +1450,7 @@ function DesgloseNeto({ingresosBrutos,aCobrar,totalComisiones,totalInstructores,
   const byVendedorACobrar=useMemo(()=>{
     const m={};
     filteredClasses.forEach(c=>{
-      if(c.scenario==="own_class") return;
+      if(c.scenario==="own_class"&&c.schoolCut>0) return;
       const pending=c.amount-c.paidAmount;
       if(pending<=0) return;
       const k=c.sellerId||"__escuela__";
