@@ -324,6 +324,13 @@ function ClassBlock({ cls, pxPerMin, color, onEdit, onDelete, blockTop, blockHei
           <DiscBadge discipline={cls.discipline} size={8} />
         </div>
       )}
+      {cls.notes && !alwaysShowBadge && (
+        <div style={{ fontSize: 9, color: T.textDim, marginTop: 1,
+          overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2,
+          WebkitBoxOrient: "vertical" }}>
+          {cls.notes}
+        </div>
+      )}
       {/* Botones editar / eliminar */}
       {(onEdit || onDelete) && (
         <div style={{ position: "absolute", top: 3, right: 3, display: "flex", gap: 2 }}>
