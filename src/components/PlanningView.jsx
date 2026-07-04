@@ -1108,9 +1108,9 @@ export function PlanningInstructorView({ classes, staffMember, staff = [] }) {
 }
 
 // ─── PLANNING WEEK OVERVIEW (admin) ──────────────────────────────────────────
-function DraggableWeekCard({ c, onEdit }) {
+function DraggableWeekCard({ c, onEdit, color: colorProp }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: c.id, data: { cls: c } });
-  const color = T.red;
+  const color = colorProp ?? T.red;
   const startMin = timeToMin(c.horarioInicio);
   const endStr = startMin != null ? fmtTime(minToTime(startMin + classDuration(c))) : null;
   return (
@@ -1155,12 +1155,13 @@ function DroppableWeekCell({ instrId, date, children }) {
   );
 }
 
-function WeekCell({ classes, onEdit, showInstructor, staff }) {
+function WeekCell({ classes, onEdit, showInstructor, staff, draggable }) {
   const sorted = [...classes].sort((a, b) => (timeToMin(a.horarioInicio) ?? 9999) - (timeToMin(b.horarioInicio) ?? 9999));
   return (
     <div style={{ padding: 4, display: "flex", flexDirection: "column", gap: 3, minHeight: 52 }}>
       {sorted.map(c => {
         const color = classColor(c);
+        if (draggable) return <DraggableWeekCard key={c.id} c={c} onEdit={onEdit} color={color} />;
         const startMin = timeToMin(c.horarioInicio);
         const endStr = startMin != null ? fmtTime(minToTime(startMin + classDuration(c))) : null;
         const instr = showInstructor ? staff.find(s => s.id === c.instructorId) : null;
@@ -1278,7 +1279,7 @@ function PlanningWeekOverview({ classes, staff, onEdit, onUpdate }) {
                   const cls = classes.filter(c => c.classDate === d && c.instructorId === instr.id);
                   return (
                     <DroppableWeekCell key={d} instrId={instr.id} date={d}>
-                      <WeekCell classes={cls} onEdit={onEdit} staff={staff} />
+                      <WeekCell classes={cls} onEdit={onEdit} staff={staff} draggable />
                     </DroppableWeekCell>
                   );
                 })}
