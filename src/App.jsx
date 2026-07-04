@@ -1447,9 +1447,22 @@ function DesgloseNeto({ingresosBrutos,aCobrar,totalComisiones,totalInstructores,
     return Object.values(m).sort((a,b)=>b.amount-a.amount);
   },[filteredClasses,staff,defaultHourlyRate]);
 
+  const byVendedorACobrar=useMemo(()=>{
+    const m={};
+    filteredClasses.forEach(c=>{
+      if(c.scenario==="own_class") return;
+      const pending=c.amount-c.paidAmount;
+      if(pending<=0) return;
+      const k=c.sellerId||"__escuela__";
+      if(!m[k]){const s=staff.find(x=>x.id===k);m[k]={name:s?.name||"Escuela",amount:0,clases:0};}
+      m[k].amount+=pending; m[k].clases++;
+    });
+    return Object.values(m).sort((a,b)=>b.amount-a.amount);
+  },[filteredClasses,staff]);
+
   const rows=[
     {key:"cobrado",   label:"Cobrado",                  value:ingresosBrutos, color:T.green,  sign:"+"},
-    {key:"acobrar",   label:"+ A cobrar",                value:aCobrar,        color:T.orange, sign:"+"},
+    {key:"acobrar",   label:"+ A cobrar",                value:aCobrar,        color:T.orange, sign:"+", expandable:true},
     {key:"comisiones",label:"Comisiones vendedores",     value:totalComisiones,color:T.cyan,   sign:"−", expandable:true},
     {key:"honorarios",label:"Honorarios instructores",   value:totalInstructores,color:T.purple,sign:"−", expandable:true},
     {key:"gastos",    label:"Gastos operativos",         value:totalGastos,    color:T.orange, sign:"−"},
@@ -1475,13 +1488,15 @@ function DesgloseNeto({ingresosBrutos,aCobrar,totalComisiones,totalInstructores,
             </div>
             {r.expandable&&expanded===r.key&&(
               <div style={{margin:"2px 0 4px",padding:"8px 12px",background:T.surface,border:`1px solid ${T.border}`,borderRadius:7,fontSize:11}}>
-                {(r.key==="comisiones"?byVendedor:byInstructor).map((d,i)=>(
-                  <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:i<(r.key==="comisiones"?byVendedor:byInstructor).length-1?`1px solid ${T.border}`:"none"}}>
+                {(r.key==="comisiones"?byVendedor:r.key==="acobrar"?byVendedorACobrar:byInstructor).map((d,i)=>{
+                  const list=r.key==="comisiones"?byVendedor:r.key==="acobrar"?byVendedorACobrar:byInstructor;
+                  return(
+                  <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:i<list.length-1?`1px solid ${T.border}`:"none"}}>
                     <span style={{color:d.estimated?T.orange:T.textDim}}>{d.name}{d.estimated?" ⚠":""}  <span style={{color:T.muted}}>({d.clases} clase{d.clases!==1?"s":""})</span></span>
                     <span style={{fontFamily:"monospace",color:d.estimated?T.orange:r.color,fontWeight:600}}>{fmt(d.amount)}</span>
                   </div>
-                ))}
-                {(r.key==="comisiones"?byVendedor:byInstructor).length===0&&<span style={{color:T.muted}}>Sin datos</span>}
+                );})}
+                {(r.key==="comisiones"?byVendedor:r.key==="acobrar"?byVendedorACobrar:byInstructor).length===0&&<span style={{color:T.muted}}>Sin datos</span>}
               </div>
             )}
           </div>
