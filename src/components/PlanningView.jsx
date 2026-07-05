@@ -1148,15 +1148,38 @@ function DraggableWeekCard({ c, onEdit, color: colorProp }) {
   );
 }
 
-function DroppableWeekCell({ instrId, date, children }) {
+function DroppableWeekCell({ instrId, date, children, unavailData }) {
   const { setNodeRef, isOver } = useDroppable({
     id: `week-drop-${instrId}-${date}`,
     data: { instrId, date },
   });
+  const isFullDay = unavailData && !unavailData.hora_inicio;
+  const hasRange  = unavailData && !!unavailData.hora_inicio;
   return (
-    <div ref={setNodeRef} style={{ minHeight: 52, background: isOver ? `${T.accent}12` : T.card,
+    <div ref={setNodeRef} style={{ minHeight: 52, position: "relative",
+      background: isOver ? `${T.accent}12` : T.card,
       outline: isOver ? `1px dashed ${T.accent}60` : "none",
+      opacity: unavailData ? 0.75 : 1,
       transition: "background .15s" }}>
+      {isFullDay && (
+        <div style={{ position: "absolute", inset: 0, zIndex: 2, pointerEvents: "none",
+          background: `repeating-linear-gradient(-45deg,${T.red}08,${T.red}08 6px,transparent 6px,transparent 14px)`,
+          border: `1px solid ${T.red}20`, borderRadius: 0,
+          display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <span style={{ fontSize: 9, fontWeight: 700, color: T.red,
+            background: T.card, padding: "1px 6px", borderRadius: 4,
+            border: `1px solid ${T.red}40` }}>✗ No disponible</span>
+        </div>
+      )}
+      {hasRange && (
+        <div style={{ padding: "2px 4px" }}>
+          <span style={{ fontSize: 9, fontWeight: 700, color: T.red,
+            background: `${T.red}15`, border: `1px solid ${T.red}30`,
+            borderRadius: 4, padding: "1px 5px", display: "inline-block" }}>
+            ✗ {fmtTime(unavailData.hora_inicio)}–{fmtTime(unavailData.hora_fin)}
+          </span>
+        </div>
+      )}
       {children}
     </div>
   );
@@ -1318,7 +1341,7 @@ function PlanningWeekOverview({ classes, staff, onEdit, onUpdate, initialDate, o
                 {weekDays.map(d => {
                   const cls = classes.filter(c => c.classDate === d && c.instructorId === instr.id);
                   return (
-                    <DroppableWeekCell key={d} instrId={instr.id} date={d}>
+                    <DroppableWeekCell key={d} instrId={instr.id} date={d} unavailData={unavailMap.get(`${instr.id}_${d}`)}>
                       <WeekCell classes={cls} onEdit={onEdit} staff={staff} draggable />
                     </DroppableWeekCell>
                   );
