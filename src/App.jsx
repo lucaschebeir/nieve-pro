@@ -1507,7 +1507,7 @@ function DesgloseNeto({ingresosBrutos,aCobrar,totalComisiones,totalInstructores,
 }
 
 function FinanzasPage({classes,expenses,staff,config,onAddExpense}){
-  const [newExp,setNewExp]=useState({amount:"",description:"",category:"general"});
+  const [newExp,setNewExp]=useState({amount:"",description:"",category:"general",date:today});
   const [saving,setSaving]=useState(false);
   const [season,setSeason]=useState("current");
   const [customFrom,setCustomFrom]=useState(seasonRange().from);
@@ -1541,7 +1541,7 @@ function FinanzasPage({classes,expenses,staff,config,onAddExpense}){
   async function addExp(){
     if(!newExp.amount||!newExp.description)return;
     setSaving(true);
-    try{await onAddExpense({amount:+newExp.amount,description:newExp.description,category:newExp.category,date:today});setNewExp({amount:"",description:"",category:"general"});}
+    try{await onAddExpense({amount:+newExp.amount,description:newExp.description,category:newExp.category,date:newExp.date||today});setNewExp({amount:"",description:"",category:"general",date:today});}
     finally{setSaving(false);}
   }
   return(
@@ -1581,6 +1581,7 @@ function FinanzasPage({classes,expenses,staff,config,onAddExpense}){
               <Inp label="Monto USD" type="number" value={newExp.amount} onChange={v=>setNewExp(p=>({...p,amount:v}))} placeholder="0" required/>
               <Inp label="Categoría" value={newExp.category} onChange={v=>setNewExp(p=>({...p,category:v}))} options={["general","mantenimiento","logística","materiales","salarios","otros"].map(c=>({value:c,label:c.charAt(0).toUpperCase()+c.slice(1)}))}/>
             </div>
+            <Inp label="Fecha" type="date" value={newExp.date} onChange={v=>setNewExp(p=>({...p,date:v}))} required/>
             <Inp label="Descripción" value={newExp.description} onChange={v=>setNewExp(p=>({...p,description:v}))} placeholder="Ej: Mantenimiento tablas, Combustible..." required/>
             <Btn variant="teal" full disabled={saving} onClick={addExp}>{saving?"Guardando...":"＋ Registrar Gasto"}</Btn>
           </div>
