@@ -1153,8 +1153,8 @@ function DroppableWeekCell({ instrId, date, children, unavailData }) {
     id: `week-drop-${instrId}-${date}`,
     data: { instrId, date },
   });
-  const isFullDay = unavailData && !unavailData.hora_inicio;
-  const hasRange  = unavailData && !!unavailData.hora_inicio;
+  const isFullDay = unavailData && !unavailData.horaInicio;
+  const hasRange  = unavailData && !!unavailData.horaInicio;
   return (
     <div ref={setNodeRef} style={{ minHeight: 52, position: "relative",
       background: isOver ? `${T.accent}12` : T.card,
@@ -1176,7 +1176,7 @@ function DroppableWeekCell({ instrId, date, children, unavailData }) {
           <span style={{ fontSize: 9, fontWeight: 700, color: T.red,
             background: `${T.red}15`, border: `1px solid ${T.red}30`,
             borderRadius: 4, padding: "1px 5px", display: "inline-block" }}>
-            ✗ {fmtTime(unavailData.hora_inicio)}–{fmtTime(unavailData.hora_fin)}
+            ✗ {fmtTime(unavailData.horaInicio)}–{fmtTime(unavailData.horaFin)}
           </span>
         </div>
       )}
@@ -1237,12 +1237,14 @@ function PlanningWeekOverview({ classes, staff, onEdit, onUpdate, initialDate, o
   useEffect(() => {
     supabase
       .from("instructor_unavailability")
-      .select("*")
-      .gte("date", weekDays[0])
-      .lte("date", weekDays[6])
+      .select("staff_id, date, hora_inicio, hora_fin")
+      .in("date", weekDays)
       .then(({ data }) => {
         const m = new Map();
-        (data || []).forEach(u => m.set(`${u.instructor_id}_${u.date}`, u));
+        (data || []).forEach(r => m.set(`${r.staff_id}_${r.date}`, {
+          horaInicio: r.hora_inicio ? r.hora_inicio.slice(0, 5) : null,
+          horaFin:    r.hora_fin    ? r.hora_fin.slice(0, 5)    : null,
+        }));
         setUnavailMap(m);
       });
   }, [weekDays[0]]);
@@ -1274,7 +1276,7 @@ function PlanningWeekOverview({ classes, staff, onEdit, onUpdate, initialDate, o
     const unavail = unavailMap.get(`${instrId}_${date}`);
     if (unavail) {
       const instr = staff.find(s => s.id === instrId);
-      const rangeLabel = unavail.hora_inicio ? `${unavail.hora_inicio}–${unavail.hora_fin}` : "todo el día";
+      const rangeLabel = unavail.horaInicio ? `${unavail.horaInicio}–${unavail.horaFin}` : "todo el día";
       const ok = window.confirm(
         `⚠ ${instr?.name ?? "Este instructor"} está marcado como no disponible (${rangeLabel}) para este día.\n\n¿Asignar la clase igual?`
       );
