@@ -811,6 +811,19 @@ function AdminApp() {
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(hojaStaff), nombreHoja);
     });
 
+    // Hoja Escuela: clases y clientes sin vendedor asignado
+    const escuelaClases=classes.filter(c=>!c.sellerId);
+    const escuelaClientes=clients.filter(c=>!c.sellerId);
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+      ["━━━ ESCUELA (sin vendedor asignado) ━━━"],[],
+      ["CLASES"],["Fecha","Cliente","Tipo","Monto","Pagado","Saldo","Est.Pago","Instructor","Notas"],
+      ...escuelaClases.map(c=>[c.classDate,c.clientName,c.classTypeName,c.amount,c.paidAmount,c.amount-c.paidAmount,PAY_STATUS[c.paymentStatus]?.label,staff.find(s=>s.id===c.instructorId)?.name||"",c.notes||""]),
+      [],[`Total clases: ${escuelaClases.length}`],[`Total facturado: ${escuelaClases.reduce((a,c)=>a+c.amount,0)}`],[`Total cobrado: ${escuelaClases.reduce((a,c)=>a+c.paidAmount,0)}`],
+      [],
+      ["CLIENTES"],["Nombre","Teléfono","Email","Notas"],
+      ...escuelaClientes.map(c=>[c.name,c.phone||"",c.email||"",c.notes||""]),
+    ]), "Escuela");
+
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(settlements.map(st=>{
       const s=staff.find(x=>x.id===st.staffId);
       return{Fecha:st.settledAt,Staff:s?.name||"","Periodo Inicio":st.periodStart,"Periodo Fin":st.periodEnd,Clases:st.totalClasses,"Total Pagado":st.totalEarned,Método:st.method,Notas:st.notes||""};
