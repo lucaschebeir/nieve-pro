@@ -1199,6 +1199,7 @@ function WeekCell({ classes, onEdit, showInstructor, staff, draggable }) {
 function PlanningWeekOverview({ classes, staff, onEdit, onUpdate, initialDate, onDateChange, onSwitchToDay }) {
   const [anchorDate, setAnchorDateRaw] = useState(initialDate ?? todayStr());
   const [activeCls, setActiveCls] = useState(null);
+  const [unavailMap, setUnavailMap] = useState(new Map());
 
   function setAnchorDate(fn) {
     setAnchorDateRaw(prev => {
@@ -1209,6 +1210,19 @@ function PlanningWeekOverview({ classes, staff, onEdit, onUpdate, initialDate, o
   }
   const weekDays = getWeekDays(anchorDate);
   const today = todayStr();
+
+  useEffect(() => {
+    supabase
+      .from("instructor_unavailability")
+      .select("*")
+      .gte("date", weekDays[0])
+      .lte("date", weekDays[6])
+      .then(({ data }) => {
+        const m = new Map();
+        (data || []).forEach(u => m.set(`${u.instructor_id}_${u.date}`, u));
+        setUnavailMap(m);
+      });
+  }, [weekDays[0]]);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
@@ -1234,6 +1248,15 @@ function PlanningWeekOverview({ classes, staff, onEdit, onUpdate, initialDate, o
     const cls = active.data.current?.cls;
     if (!cls || !instrId || !date) return;
     if (cls.classDate !== date) return;
+    const unavail = unavailMap.get(`${instrId}_${date}`);
+    if (unavail) {
+      const instr = staff.find(s => s.id === instrId);
+      const rangeLabel = unavail.hora_inicio ? `${unavail.hora_inicio}–${unavail.hora_fin}` : "todo el día";
+      const ok = window.confirm(
+        `⚠ ${instr?.name ?? "Este instructor"} está marcado como no disponible (${rangeLabel}) para este día.\n\n¿Asignar la clase igual?`
+      );
+      if (!ok) return;
+    }
     onUpdate(cls.id, { instructorId: instrId });
   }
 
