@@ -1519,6 +1519,7 @@ function FinanzasPage({classes,expenses,staff,config,onAddExpense}){
     return {sfrom:"2000-01-01",sto:"2099-12-31"};
   },[season,customFrom,customTo]);
   const filteredClasses=useMemo(()=>classes.filter(c=>c.classDate>=sfrom&&c.classDate<=sto),[classes,sfrom,sto]);
+  const filteredExpenses=useMemo(()=>expenses.filter(e=>e.date>=sfrom&&e.date<=sto),[expenses,sfrom,sto]);
   const defaultHourlyRate=40;
   const unassignedClasses=filteredClasses.filter(c=>!c.instructorId&&c.scenario!=="own_class");
   const estimatedInstrCost=unassignedClasses.reduce((a,c)=>{
@@ -1533,7 +1534,7 @@ function FinanzasPage({classes,expenses,staff,config,onAddExpense}){
   const ingresosProyectados=ingresosBrutos+aCobrar;
   const totalComisiones=filteredClasses.reduce((a,c)=>a+c.sellerCommission,0);
   const totalInstructores=filteredClasses.reduce((a,c)=>a+c.instructorEarning,0)+estimatedInstrCost;
-  const totalGastos=expenses.reduce((a,e)=>a+e.amount,0);
+  const totalGastos=filteredExpenses.reduce((a,e)=>a+e.amount,0);
   const netosAntes=ingresosBrutos-totalComisiones-totalInstructores;
   const netosFinal=netosAntes-totalGastos;
   const netoProyectado=ingresosProyectados-totalComisiones-totalInstructores-totalGastos;
@@ -1599,8 +1600,8 @@ function FinanzasPage({classes,expenses,staff,config,onAddExpense}){
         <table style={{width:"100%",borderCollapse:"collapse"}}>
           <thead><tr>{["Fecha","Descripción","Categoría","Monto"].map(h=><TH key={h}>{h}</TH>)}</tr></thead>
           <tbody>
-            {expenses.slice().reverse().map(e=>(<tr key={e.id}><TD style={{fontSize:12,color:T.textDim}}>{fmtDate(e.date)}</TD><TD style={{fontWeight:600}}>{e.description}</TD><TD><Badge text={e.category} color={T.orange} small/></TD><TD style={{fontFamily:"monospace",color:T.orange,fontWeight:700}}>{fmt(e.amount)}</TD></tr>))}
-            {expenses.length===0&&<tr><td colSpan={4}><Empty text="Sin gastos"/></td></tr>}
+            {filteredExpenses.slice().reverse().map(e=>(<tr key={e.id}><TD style={{fontSize:12,color:T.textDim}}>{fmtDate(e.date)}</TD><TD style={{fontWeight:600}}>{e.description}</TD><TD><Badge text={e.category} color={T.orange} small/></TD><TD style={{fontFamily:"monospace",color:T.orange,fontWeight:700}}>{fmt(e.amount)}</TD></tr>))}
+            {filteredExpenses.length===0&&<tr><td colSpan={4}><Empty text="Sin gastos"/></td></tr>}
           </tbody>
         </table>
       </Card>
