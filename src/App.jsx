@@ -816,20 +816,27 @@ function AdminApp() {
       return{Fecha:st.settledAt,Staff:s?.name||"","Periodo Inicio":st.periodStart,"Periodo Fin":st.periodEnd,Clases:st.totalClasses,"Total Pagado":st.totalEarned,Método:st.method,Notas:st.notes||""};
     })), "Liquidaciones");
 
-    const ingresosBrutos=classes.reduce((a,c)=>c.scenario==="own_class"?a+c.schoolCut:a+c.paidAmount,0);
-    const totalFacturado=classes.reduce((a,c)=>a+c.amount,0);
-    const totalComisiones=classes.reduce((a,c)=>a+c.sellerCommission,0);
-    const totalInstructores=classes.reduce((a,c)=>a+c.instructorEarning,0);
-    const totalGastos=expenses.reduce((a,e)=>a+e.amount,0);
-    const netoAntes=ingresosBrutos-totalComisiones-totalInstructores;
-    const netoFinal=netoAntes-totalGastos;
+    const {from:xFrom,to:xTo}=seasonRange();
+    const xClasses=classes.filter(c=>c.classDate>=xFrom&&c.classDate<=xTo);
+    const xExpenses=expenses.filter(e=>e.date>=xFrom&&e.date<=xTo);
+    const xIngresosBrutos=xClasses.reduce((a,c)=>c.scenario==="own_class"?a+c.schoolCut:a+c.paidAmount,0);
+    const xACobrar=xClasses.reduce((a,c)=>{if(c.scenario==="own_class"&&c.schoolCut>0)return a;return a+(c.amount-c.paidAmount);},0);
+    const xTotalFacturado=xClasses.reduce((a,c)=>a+c.amount,0);
+    const xTotalComisiones=xClasses.reduce((a,c)=>a+(c.sellerCommission||0),0);
+    const xTotalInstructores=xClasses.reduce((a,c)=>a+(c.instructorEarning||0),0);
+    const xTotalGastos=xExpenses.reduce((a,e)=>a+e.amount,0);
+    const xNetoFinal=xIngresosBrutos-xTotalComisiones-xTotalInstructores-xTotalGastos;
+    const xNetoProyectado=xIngresosBrutos+xACobrar-xTotalComisiones-xTotalInstructores-xTotalGastos;
+    const xBonusIona=xNetoProyectado*0.1;
+    const xNetoFinal2=xNetoProyectado*0.9;
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
-      ["RESUMEN FINANCIERO"],[],
-      ["Total Facturado",totalFacturado],["Total Cobrado",ingresosBrutos],["Saldo a Cobrar",totalFacturado-ingresosBrutos],[],
-      ["Comisiones Vendedores",totalComisiones],["Honorarios Instructores",totalInstructores],["Neto antes de gastos",netoAntes],[],
-      ["Gastos Operativos",totalGastos],[],["NETO FINAL",netoFinal],[],
+      ["RESUMEN FINANCIERO",`Temporada ${xFrom} → ${xTo}`],[],
+      ["Total Facturado",xTotalFacturado],["Total Cobrado",xIngresosBrutos],["A Cobrar",xACobrar],[],
+      ["Comisiones Vendedores",xTotalComisiones],["Honorarios Instructores",xTotalInstructores],["Gastos Operativos",xTotalGastos],[],
+      ["NETO FINAL (cobrado)",xNetoFinal],["NETO PROYECTADO",xNetoProyectado],[],
+      ["Bonus Iona (10% neto proy.)",xBonusIona],["NETO PROYECTADO FINAL",xNetoFinal2],[],
       ["GASTOS DETALLE"],["Fecha","Descripción","Categoría","Monto"],
-      ...expenses.map(e=>[e.date,e.description,e.category,e.amount]),
+      ...xExpenses.map(e=>[e.date,e.description,e.category,e.amount]),
     ]), "Finanzas");
 
     XLSX.writeFile(wb, `nievepro_${fecha}.xlsx`);
