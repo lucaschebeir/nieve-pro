@@ -1570,6 +1570,7 @@ function FinanzasPage({classes,expenses,staff,config,onAddExpense}){
         <Card><Stat label="Gastos Operativos" value={fmt(totalGastos)} color={T.orange} icon="↓"/></Card>
         <Card style={{background:`${T.gold}08`,borderColor:`${T.gold}40`}}><Stat label="Neto Final" value={fmt(netosFinal)} color={T.gold} icon="★" sub="sobre lo cobrado"/></Card>
         <Card style={{background:`${T.teal}08`,borderColor:`${T.teal}40`}}><Stat label="Neto Proyectado" value={fmt(netoProyectado)} color={T.teal} icon="◎" sub="si se cobra todo"/></Card>
+        <Card style={{background:`${T.purple}08`,borderColor:`${T.purple}40`}}><Stat label="Bonus Iona (10%)" value={fmt(netoProyectado*0.1)} color={T.purple} icon="◈" sub="informativo · sobre neto proyectado"/></Card>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:24,alignItems:"start"}}>
         <Card>
