@@ -1331,7 +1331,7 @@ function StaffPage({staff,getBalance,settlements,clients,classes,extraCommission
   if(viewStaff){
     const bal=getBalance(viewStaff.id);
     const myClasses=classes.filter(c=>c.sellerId===viewStaff.id||c.instructorId===viewStaff.id).sort((a,b)=>b.classDate?.localeCompare(a.classDate));
-    const pendingPast=myClasses.filter(c=>!c.isSettled&&c.classDate<=today).reduce((a,c)=>{
+    const pendingPast=myClasses.filter(c=>!c.isSettled&&c.classDone).reduce((a,c)=>{
       const earn=(c.instructorId===viewStaff.id&&(c.scenario==="instructor_only"||c.scenario==="full"))?c.instructorEarning:c.sellerCommission;
       return a+(earn||0);
     },0);
