@@ -1046,6 +1046,7 @@ function ClassesPage({classes,staff,clients,onEdit,onNew,onClientClick,onFinance
   const [season,setSeason]=useState("current");
   const [customFrom,setCustomFrom]=useState(seasonRange().from);
   const [customTo,setCustomTo]=useState(seasonRange().to);
+  const [sortDir,setSortDir]=useState("desc");
   const [selected,setSelected]=useState(new Set());
   const [expandedGroups,setExpandedGroups]=useState(new Set());
   const [groupPayModal,setGroupPayModal]=useState(null); // {groupId, groupClasses}
@@ -1069,15 +1070,17 @@ function ClassesPage({classes,staff,clients,onEdit,onNew,onClientClick,onFinance
     return true;
   }),[classes,sfrom,sto,payF,instrF,settF,search]);
 
+  const sorted=useMemo(()=>[...filtered].sort((a,b)=>sortDir==="asc"?a.classDate.localeCompare(b.classDate):b.classDate.localeCompare(a.classDate)),[filtered,sortDir]);
+
   const {groupMap,ungrouped}=useMemo(()=>{
     const gm={};
     const ug=[];
-    for(const c of filtered){
+    for(const c of sorted){
       if(c.groupId){if(!gm[c.groupId])gm[c.groupId]=[];gm[c.groupId].push(c);}
       else ug.push(c);
     }
     return {groupMap:gm,ungrouped:ug};
-  },[filtered]);
+  },[sorted]);
 
   const totalM=filtered.reduce((a,c)=>c.scenario==="own_class"&&c.schoolCut>0?a+c.schoolCut:a+c.amount,0);
   const totalC=filtered.reduce((a,c)=>c.scenario==="own_class"&&c.schoolCut>0?a:a+c.paidAmount,0);
@@ -1117,6 +1120,7 @@ function ClassesPage({classes,staff,clients,onEdit,onNew,onClientClick,onFinance
         <TD style={{fontSize:12}}>{seller?<div style={{display:"flex",alignItems:"center",gap:6}}><Av name={seller.name} size={22} color={T.cyan}/>{seller.name}</div>:<span style={{color:T.muted}}>—</span>}</TD>
         <TD>{instr?<div><div style={{display:"flex",alignItems:"center",gap:6,fontSize:12}}><Av name={instr.name} size={22} color={T.purple}/>{instr.name}</div><InstrBadge status={c.instructorStatus}/></div>:<InstrBadge status="unassigned"/>}</TD>
         <TD style={{fontFamily:"monospace",color:T.accent,fontWeight:700}}>{fmt(staffE)}</TD>
+        <TD style={{fontSize:11,color:T.textDim,whiteSpace:"nowrap"}}>{c.createdAt?fmtDate(c.createdAt):"—"}</TD>
         <TD><Badge text={c.isSettled?"LIQ.":"PEND."} color={c.isSettled?T.muted:T.gold} small dot={!c.isSettled}/></TD>
         <TD><div style={{display:"flex",gap:6}}>{onEdit&&<Btn variant="ghost" size="sm" onClick={()=>onEdit(c)}>✎</Btn>}{onDelete&&<Btn variant="danger" size="sm" onClick={()=>{if(window.confirm("¿Eliminar esta clase?"))onDelete(c.id)}}>✕</Btn>}</div></TD>
       </tr>
@@ -1175,7 +1179,7 @@ function ClassesPage({classes,staff,clients,onEdit,onNew,onClientClick,onFinance
       </Card>
       <Card style={{padding:0,overflow:"auto"}}>
         <table style={{width:"100%",borderCollapse:"collapse",minWidth:1050}}>
-          <thead><tr><TH>Fecha</TH><TH>Tipo</TH><TH>Cliente</TH><TH>Monto / Cobrado</TH><TH>Pago</TH><TH>Vendedor</TH><TH>Instructor</TH><TH>Staff Gana</TH><TH>Liquid.</TH><TH>Edit.</TH></tr></thead>
+          <thead><tr><TH><button onClick={()=>setSortDir(d=>d==="asc"?"desc":"asc")} style={{background:"none",border:"none",color:T.textDim,cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:700,padding:0}}>{sortDir==="asc"?"▲":"▼"} Fecha</button></TH><TH>Tipo</TH><TH>Cliente</TH><TH>Monto / Cobrado</TH><TH>Pago</TH><TH>Vendedor</TH><TH>Instructor</TH><TH>Staff Gana</TH><TH>Reserva</TH><TH>Liquid.</TH><TH>Edit.</TH></tr></thead>
           <tbody>
             {Object.entries(groupMap).map(([gid,gclasses])=>{
               const expanded=expandedGroups.has(gid);
