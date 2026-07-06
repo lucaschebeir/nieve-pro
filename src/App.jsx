@@ -832,11 +832,13 @@ function AdminApp() {
     const {from:xFrom,to:xTo}=seasonRange();
     const xClasses=classes.filter(c=>c.classDate>=xFrom&&c.classDate<=xTo);
     const xExpenses=expenses.filter(e=>e.date>=xFrom&&e.date<=xTo);
-    const xIngresosBrutos=xClasses.reduce((a,c)=>c.scenario==="own_class"?a+c.schoolCut:a+c.paidAmount,0);
+    const xIngresosBrutos=xClasses.reduce((a,c)=>c.scenario==="own_class"&&c.schoolCut>0?a:a+c.paidAmount,0);
     const xACobrar=xClasses.reduce((a,c)=>{if(c.scenario==="own_class"&&c.schoolCut>0)return a;return a+(c.amount-c.paidAmount);},0);
     const xTotalFacturado=xClasses.reduce((a,c)=>a+c.amount,0);
-    const xTotalComisiones=xClasses.reduce((a,c)=>a+(c.sellerCommission||0),0);
-    const xTotalInstructores=xClasses.reduce((a,c)=>a+(c.instructorEarning||0),0);
+    const xTotalComisiones=xClasses.reduce((a,c)=>c.scenario==="own_class"&&c.schoolCut>0?a:a+(c.sellerCommission||0),0);
+    const xHonorariosAPagar=xClasses.reduce((a,c)=>a+(c.instructorEarning||0),0);
+    const xAportesStaff=xClasses.reduce((a,c)=>c.scenario==="own_class"&&c.schoolCut>0?a+c.schoolCut:a,0);
+    const xTotalInstructores=xHonorariosAPagar-xAportesStaff;
     const xTotalGastos=xExpenses.reduce((a,e)=>a+e.amount,0);
     const xNetoFinal=xIngresosBrutos-xTotalComisiones-xTotalInstructores-xTotalGastos;
     const xNetoProyectado=xIngresosBrutos+xACobrar-xTotalComisiones-xTotalInstructores-xTotalGastos;
@@ -845,7 +847,7 @@ function AdminApp() {
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
       ["RESUMEN FINANCIERO",`Temporada ${xFrom} → ${xTo}`],[],
       ["Total Facturado",xTotalFacturado],["Total Cobrado",xIngresosBrutos],["A Cobrar",xACobrar],[],
-      ["Comisiones Vendedores",xTotalComisiones],["Honorarios Instructores",xTotalInstructores],["Gastos Operativos",xTotalGastos],[],
+      ["Comisiones Vendedores",xTotalComisiones],["Honorarios a Pagar",xHonorariosAPagar],["Aportes Instructores (own class)",xAportesStaff],["Honorarios Neto",xTotalInstructores],["Gastos Operativos",xTotalGastos],[],
       ["NETO FINAL (cobrado)",xNetoFinal],["NETO PROYECTADO",xNetoProyectado],[],
       ["Bonus Iona (10% neto proy.)",xBonusIona],["NETO PROYECTADO FINAL",xNetoFinal2],[],
       ["GASTOS DETALLE"],["Fecha","Descripción","Categoría","Monto"],
@@ -1052,7 +1054,7 @@ function ClassesPage({classes,staff,clients,onEdit,onNew,onClientClick,onFinance
   },[filtered]);
 
   const totalM=filtered.reduce((a,c)=>c.scenario==="own_class"&&c.schoolCut>0?a+c.schoolCut:a+c.amount,0);
-  const totalC=filtered.reduce((a,c)=>c.scenario==="own_class"?a+(c.schoolCut||c.paidAmount):a+c.paidAmount,0);
+  const totalC=filtered.reduce((a,c)=>c.scenario==="own_class"&&c.schoolCut>0?a:a+c.paidAmount,0);
 
   function toggleSelect(id){setSelected(s=>{const n=new Set(s);n.has(id)?n.delete(id):n.add(id);return n;});}
   function toggleGroup(gid){setExpandedGroups(s=>{const n=new Set(s);n.has(gid)?n.delete(gid):n.add(gid);return n;});}
@@ -1435,7 +1437,7 @@ function StaffPage({staff,getBalance,settlements,clients,classes,extraCommission
   );
 }
 
-function DesgloseNeto({ingresosBrutos,aCobrar,totalComisiones,totalInstructores,totalGastos,netosFinal,netoProyectado,filteredClasses,staff,estimatedInstrCost,unassignedClasses,defaultHourlyRate}){
+function DesgloseNeto({ingresosBrutos,aCobrar,totalComisiones,honorariosAPagar,aportesStaff,totalInstructores,totalGastos,netosFinal,netoProyectado,filteredClasses,staff,estimatedInstrCost,unassignedClasses,defaultHourlyRate}){
   const [expanded,setExpanded]=useState(null);
   const toggle=k=>setExpanded(p=>p===k?null:k);
 
@@ -1443,6 +1445,7 @@ function DesgloseNeto({ingresosBrutos,aCobrar,totalComisiones,totalInstructores,
     const m={};
     filteredClasses.forEach(c=>{
       if(!c.sellerCommission) return;
+      if(c.scenario==="own_class"&&c.schoolCut>0) return; // staff own_class: excluido
       const k=c.sellerId||"__escuela__";
       if(!m[k]){const s=staff.find(x=>x.id===k);m[k]={name:s?.name||"Escuela",amount:0,clases:0};}
       m[k].amount+=c.sellerCommission; m[k].clases++;
@@ -1467,6 +1470,17 @@ function DesgloseNeto({ingresosBrutos,aCobrar,totalComisiones,totalInstructores,
     return Object.values(m).sort((a,b)=>b.amount-a.amount);
   },[filteredClasses,staff,defaultHourlyRate]);
 
+  const byAportes=useMemo(()=>{
+    const m={};
+    filteredClasses.forEach(c=>{
+      if(c.scenario!=="own_class"||c.schoolCut<=0) return;
+      const k=c.instructorId||"__?__";
+      if(!m[k]){const s=staff.find(x=>x.id===k);m[k]={name:s?.name||"?",amount:0,clases:0};}
+      m[k].amount+=c.schoolCut; m[k].clases++;
+    });
+    return Object.values(m).sort((a,b)=>b.amount-a.amount);
+  },[filteredClasses,staff]);
+
   const byVendedorACobrar=useMemo(()=>{
     const m={};
     filteredClasses.forEach(c=>{
@@ -1481,13 +1495,13 @@ function DesgloseNeto({ingresosBrutos,aCobrar,totalComisiones,totalInstructores,
   },[filteredClasses,staff]);
 
   const rows=[
-    {key:"cobrado",   label:"Cobrado",                  value:ingresosBrutos, color:T.green,  sign:"+"},
-    {key:"acobrar",   label:"+ A cobrar",                value:aCobrar,        color:T.orange, sign:"+", expandable:true},
-    {key:"comisiones",label:"Comisiones vendedores",     value:totalComisiones,color:T.cyan,   sign:"−", expandable:true},
-    {key:"honorarios",label:"Honorarios instructores",   value:totalInstructores,color:T.purple,sign:"−", expandable:true},
-    {key:"gastos",    label:"Gastos operativos",         value:totalGastos,    color:T.orange, sign:"−"},
-    {key:"neto",      label:"── NETO FINAL (cobrado)",   value:netosFinal,     color:T.gold,   sign:"=", highlight:true},
-    {key:"proyectado",label:"── NETO PROYECTADO",        value:netoProyectado, color:T.teal,   sign:"=", highlight:true},
+    {key:"cobrado",   label:"Cobrado",                        value:ingresosBrutos,  color:T.green,  sign:"+"},
+    {key:"acobrar",   label:"+ A cobrar",                     value:aCobrar,         color:T.orange, sign:"+", expandable:true},
+    {key:"comisiones",label:"Comisiones vendedores",          value:totalComisiones, color:T.cyan,   sign:"−", expandable:true},
+    {key:"honorarios",label:"Honorarios instructores (neto)",value:totalInstructores,color:T.purple, sign:"−", expandable:true},
+    {key:"gastos",    label:"Gastos operativos",              value:totalGastos,     color:T.orange, sign:"−"},
+    {key:"neto",      label:"── NETO FINAL (cobrado)",        value:netosFinal,      color:T.gold,   sign:"=", highlight:true},
+    {key:"proyectado",label:"── NETO PROYECTADO",             value:netoProyectado,  color:T.teal,   sign:"=", highlight:true},
   ];
 
   return(
@@ -1517,6 +1531,17 @@ function DesgloseNeto({ingresosBrutos,aCobrar,totalComisiones,totalInstructores,
                   </div>
                 );})}
                 {(r.key==="comisiones"?byVendedor:r.key==="acobrar"?byVendedorACobrar:byInstructor).length===0&&<span style={{color:T.muted}}>Sin datos</span>}
+                {r.key==="honorarios"&&byAportes.length>0&&(
+                  <>
+                    <div style={{margin:"6px 0 4px",borderTop:`1px solid ${T.border}`,paddingTop:6,color:T.muted,fontSize:10}}>Aportes own class (descuento)</div>
+                    {byAportes.map((d,i)=>(
+                      <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:i<byAportes.length-1?`1px solid ${T.border}`:"none"}}>
+                        <span style={{color:T.textDim}}>{d.name}  <span style={{color:T.muted}}>({d.clases} clase{d.clases!==1?"s":""})</span></span>
+                        <span style={{fontFamily:"monospace",color:T.green,fontWeight:600}}>−{fmt(d.amount)}</span>
+                      </div>
+                    ))}
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -1546,14 +1571,22 @@ function FinanzasPage({classes,expenses,staff,config,onAddExpense}){
     const hours=c.instructorHours||config.rates.find(r=>r.id===c.classTypeId)?.hours||0;
     return a+hours*defaultHourlyRate;
   },0);
-  const ingresosBrutos=filteredClasses.reduce((a,c)=>c.scenario==="own_class"?a+c.schoolCut:a+c.paidAmount,0);
+  const ingresosBrutos=filteredClasses.reduce((a,c)=>{
+    if(c.scenario==="own_class"&&c.schoolCut>0) return a; // staff own_class: excluido (va en aportes)
+    return a+c.paidAmount;
+  },0);
   const aCobrar=filteredClasses.reduce((a,c)=>{
-    if(c.scenario==="own_class"&&c.schoolCut>0) return a; // staff regular own_class: excluido
+    if(c.scenario==="own_class"&&c.schoolCut>0) return a;
     return a+(c.amount-c.paidAmount);
   },0);
   const ingresosProyectados=ingresosBrutos+aCobrar;
-  const totalComisiones=filteredClasses.reduce((a,c)=>a+c.sellerCommission,0);
-  const totalInstructores=filteredClasses.reduce((a,c)=>a+c.instructorEarning,0)+estimatedInstrCost;
+  const totalComisiones=filteredClasses.reduce((a,c)=>{
+    if(c.scenario==="own_class"&&c.schoolCut>0) return a; // staff own_class: excluido
+    return a+(c.sellerCommission||0);
+  },0);
+  const honorariosAPagar=filteredClasses.reduce((a,c)=>a+(c.instructorEarning||0),0)+estimatedInstrCost;
+  const aportesStaff=filteredClasses.reduce((a,c)=>c.scenario==="own_class"&&c.schoolCut>0?a+c.schoolCut:a,0);
+  const totalInstructores=honorariosAPagar-aportesStaff;
   const totalGastos=filteredExpenses.reduce((a,e)=>a+e.amount,0);
   const netosAntes=ingresosBrutos-totalComisiones-totalInstructores;
   const netosFinal=netosAntes-totalGastos;
@@ -1586,7 +1619,7 @@ function FinanzasPage({classes,expenses,staff,config,onAddExpense}){
         <Card><Stat label="Cobrado" value={fmt(ingresosBrutos)} color={T.green} icon="↑"/></Card>
         <Card><Stat label="A Cobrar" value={fmt(aCobrar)} color={aCobrar>0?T.orange:T.muted} icon="◑"/></Card>
         <Card><Stat label="Comisiones Vendedores" value={fmt(totalComisiones)} color={T.cyan} icon="→"/></Card>
-        <Card><Stat label="Honorarios Instructores" value={fmt(totalInstructores)} color={T.purple} icon="→"/></Card>
+        <Card><Stat label="Honorarios Instructores" value={fmt(totalInstructores)} color={T.purple} icon="→" sub={aportesStaff>0?`incl. aportes −${fmt(aportesStaff)}`:undefined}/></Card>
         <Card><Stat label="Gastos Operativos" value={fmt(totalGastos)} color={T.orange} icon="↓"/></Card>
         <Card style={{background:`${T.gold}08`,borderColor:`${T.gold}40`}}><Stat label="Neto Final" value={fmt(netosFinal)} color={T.gold} icon="★" sub="sobre lo cobrado"/></Card>
         <Card style={{background:`${T.teal}08`,borderColor:`${T.teal}40`}}><Stat label="Neto Proyectado" value={fmt(netoProyectado)} color={T.teal} icon="◎" sub="si se cobra todo"/></Card>
@@ -1608,7 +1641,7 @@ function FinanzasPage({classes,expenses,staff,config,onAddExpense}){
         </Card>
         <DesgloseNeto
           ingresosBrutos={ingresosBrutos} aCobrar={aCobrar}
-          totalComisiones={totalComisiones} totalInstructores={totalInstructores}
+          totalComisiones={totalComisiones} honorariosAPagar={honorariosAPagar} aportesStaff={aportesStaff} totalInstructores={totalInstructores}
           totalGastos={totalGastos} netosFinal={netosFinal} netoProyectado={netoProyectado}
           filteredClasses={filteredClasses} staff={staff}
           estimatedInstrCost={estimatedInstrCost} unassignedClasses={unassignedClasses}
