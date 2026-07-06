@@ -639,13 +639,16 @@ function ModalSettle({name,staffId,classes,onConfirm,onClose}){
   const [method,setMethod]=useState("Transferencia");
   const [notes,setNotes]=useState("");
   const [saving,setSaving]=useState(false);
+  const [showDetail,setShowDetail]=useState(false);
   const toSettle=useMemo(()=>
     (classes||[]).filter(c=>c.classDone&&!c.isSettled&&c.classDate>=start&&c.classDate<=end&&(c.instructorId===staffId||c.sellerId===staffId))
+      .sort((a,b)=>a.classDate.localeCompare(b.classDate))
   ,[classes,staffId,start,end]);
-  const settleAmount=toSettle.reduce((a,c)=>{
+  const toSettleWithEarn=useMemo(()=>toSettle.map(c=>{
     const earn=(c.instructorId===staffId&&(c.scenario==="instructor_only"||c.scenario==="full"))?c.instructorEarning:c.sellerCommission;
-    return a+(earn||0);
-  },0);
+    return {...c,earn:earn||0};
+  }),[toSettle,staffId]);
+  const settleAmount=toSettleWithEarn.reduce((a,c)=>a+c.earn,0);
   async function submit(){
     setSaving(true);
     try{ await onConfirm(staffId,start,end,method,notes); }
@@ -653,12 +656,28 @@ function ModalSettle({name,staffId,classes,onConfirm,onClose}){
     finally{ setSaving(false); }
   }
   return(
-    <Modal title={`Liquidar — ${name}`} onClose={onClose} width={420}>
-      <div style={{background:`${T.gold}10`,border:`1px solid ${T.gold}30`,borderRadius:10,padding:16,textAlign:"center",marginBottom:20}}>
+    <Modal title={`Liquidar — ${name}`} onClose={onClose} width={480}>
+      <div style={{background:`${T.gold}10`,border:`1px solid ${T.gold}30`,borderRadius:10,padding:16,textAlign:"center",marginBottom:16}}>
         <div style={{fontSize:10,color:T.textDim,textTransform:"uppercase"}}>Total a liquidar</div>
         <div style={{fontSize:32,fontWeight:900,color:T.gold,fontFamily:"monospace"}}>{fmt(settleAmount)}</div>
-        <div style={{fontSize:12,color:T.muted}}>{toSettle.length} clase(s) dadas en el período</div>
+        <button onClick={()=>setShowDetail(p=>!p)} style={{background:"none",border:"none",color:T.accent,fontSize:12,cursor:"pointer",marginTop:4,fontFamily:"inherit"}}>
+          {toSettle.length} clase(s) {showDetail?"▲ ocultar":"▼ ver desglose"}
+        </button>
       </div>
+      {showDetail&&(
+        <div style={{maxHeight:220,overflowY:"auto",marginBottom:14,border:`1px solid ${T.border}`,borderRadius:8,fontSize:11}}>
+          {toSettleWithEarn.length===0&&<div style={{padding:12,color:T.muted,textAlign:"center"}}>Sin clases en este período</div>}
+          {toSettleWithEarn.map((c,i)=>(
+            <div key={c.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 12px",borderBottom:i<toSettleWithEarn.length-1?`1px solid ${T.border}`:"none",background:i%2===0?T.surface:"none"}}>
+              <div style={{display:"flex",flexDirection:"column",gap:1}}>
+                <span style={{color:T.text,fontWeight:600}}>{c.clientName}</span>
+                <span style={{color:T.textDim}}>{fmtDate(c.classDate)} · {c.classTypeName}</span>
+              </div>
+              <span style={{fontFamily:"monospace",color:T.gold,fontWeight:700}}>{fmt(c.earn)}</span>
+            </div>
+          ))}
+        </div>
+      )}
       <div style={{display:"flex",flexDirection:"column",gap:12}}>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
           <Inp label="Periodo Inicio" type="date" value={start} onChange={setStart}/>
@@ -668,7 +687,7 @@ function ModalSettle({name,staffId,classes,onConfirm,onClose}){
         <Inp label="Notas" value={notes} onChange={setNotes} textarea/>
       </div>
       <div style={{display:"flex",gap:10,marginTop:18}}>
-        <Btn variant="gold" full disabled={saving} onClick={submit}>{saving?"Procesando...":"✓ Confirmar Liquidación"}</Btn>
+        <Btn variant="gold" full disabled={saving||toSettle.length===0} onClick={submit}>{saving?"Procesando...":"✓ Confirmar Liquidación"}</Btn>
         <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
       </div>
     </Modal>
