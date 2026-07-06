@@ -1331,6 +1331,10 @@ function StaffPage({staff,getBalance,settlements,clients,classes,extraCommission
   if(viewStaff){
     const bal=getBalance(viewStaff.id);
     const myClasses=classes.filter(c=>c.sellerId===viewStaff.id||c.instructorId===viewStaff.id).sort((a,b)=>b.classDate?.localeCompare(a.classDate));
+    const pendingPast=myClasses.filter(c=>!c.isSettled&&c.classDate<=today).reduce((a,c)=>{
+      const earn=(c.instructorId===viewStaff.id&&(c.scenario==="instructor_only"||c.scenario==="full"))?c.instructorEarning:c.sellerCommission;
+      return a+(earn||0);
+    },0);
     const mySettlements=settlements.filter(s=>s.staffId===viewStaff.id);
     const myClients=clients.filter(c=>c.sellerId===viewStaff.id);
     const isSeller=viewStaff.role==="seller"||viewStaff.role==="both";
@@ -1354,11 +1358,11 @@ function StaffPage({staff,getBalance,settlements,clients,classes,extraCommission
               <Toggle value={viewStaff.isActive} onChange={()=>onToggle(viewStaff.id)}/>
               <Btn variant="ghost" size="sm" onClick={()=>onEdit(viewStaff)}>✎ Editar</Btn>
 <Btn variant="teal" size="sm" onClick={()=>onAddExtra(viewStaff)}>＋ Comisión</Btn>
-<Btn variant="gold" size="sm" disabled={bal.pendingAmount===0} onClick={()=>onSettle(viewStaff)}>✓ Liquidar</Btn>
+<Btn variant="gold" size="sm" disabled={pendingPast===0} onClick={()=>onSettle(viewStaff)}>✓ Liquidar</Btn>
             </div>
           </div>
           <div style={{display:"grid",gridTemplateColumns:`repeat(${isSeller?4:3},1fr)`,gap:10,marginBottom:16}}>
-            {[["A Pagar",fmt(bal.pendingAmount),T.gold],["Liquidado",fmt(mySettlements.reduce((a,s)=>a+s.totalEarned,0)),T.green],["Clases",myClasses.length,T.text],...(isSeller?[["Clientes",myClients.length,T.cyan]]:[])].map(([l,v,c])=>(
+            {[["A Pagar",fmt(pendingPast),T.gold],["Liquidado",fmt(mySettlements.reduce((a,s)=>a+s.totalEarned,0)),T.green],["Clases",myClasses.length,T.text],...(isSeller?[["Clientes",myClients.length,T.cyan]]:[])].map(([l,v,c])=>(
               <div key={l} style={{background:T.surface,borderRadius:10,padding:"12px 14px",textAlign:"center"}}>
                 <div style={{fontSize:10,color:T.textDim,textTransform:"uppercase"}}>{l}</div>
                 <div style={{fontSize:20,fontWeight:900,color:c,fontFamily:"monospace",marginTop:4}}>{v}</div>
