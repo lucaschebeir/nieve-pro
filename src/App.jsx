@@ -633,12 +633,19 @@ function ModalStaffEdit({data,config,onSave,onClose}){
 }
 
 // ─── MODAL: LIQUIDAR ──────────────────────────────────────────────────────────
-function ModalSettle({name,staffId,balance,onConfirm,onClose}){
+function ModalSettle({name,staffId,classes,onConfirm,onClose}){
   const [start,setStart]=useState(daysAgo(15));
   const [end,setEnd]=useState(today);
   const [method,setMethod]=useState("Transferencia");
   const [notes,setNotes]=useState("");
   const [saving,setSaving]=useState(false);
+  const toSettle=useMemo(()=>
+    (classes||[]).filter(c=>c.classDone&&!c.isSettled&&c.classDate>=start&&c.classDate<=end&&(c.instructorId===staffId||c.sellerId===staffId))
+  ,[classes,staffId,start,end]);
+  const settleAmount=toSettle.reduce((a,c)=>{
+    const earn=(c.instructorId===staffId&&(c.scenario==="instructor_only"||c.scenario==="full"))?c.instructorEarning:c.sellerCommission;
+    return a+(earn||0);
+  },0);
   async function submit(){
     setSaving(true);
     try{ await onConfirm(staffId,start,end,method,notes); }
@@ -649,8 +656,8 @@ function ModalSettle({name,staffId,balance,onConfirm,onClose}){
     <Modal title={`Liquidar — ${name}`} onClose={onClose} width={420}>
       <div style={{background:`${T.gold}10`,border:`1px solid ${T.gold}30`,borderRadius:10,padding:16,textAlign:"center",marginBottom:20}}>
         <div style={{fontSize:10,color:T.textDim,textTransform:"uppercase"}}>Total a liquidar</div>
-        <div style={{fontSize:32,fontWeight:900,color:T.gold,fontFamily:"monospace"}}>{fmt(balance.pendingAmount)}</div>
-        <div style={{fontSize:12,color:T.muted}}>{balance.pendingClasses} clase(s)</div>
+        <div style={{fontSize:32,fontWeight:900,color:T.gold,fontFamily:"monospace"}}>{fmt(settleAmount)}</div>
+        <div style={{fontSize:12,color:T.muted}}>{toSettle.length} clase(s) dadas en el período</div>
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:12}}>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
@@ -919,7 +926,7 @@ function AdminApp() {
       {/* MODALS */}
       {modal?.type==="class_edit"   &&<ModalClassEdit data={modal.data} staff={staff} clients={clients} classes={enrichedClasses} config={config} onSave={handleSaveClass} onClose={()=>setModal(null)}/>}
       {modal?.type==="class_finance"&&<ClassFinanceModal cls={modal.data} staff={staff} onClose={()=>setModal(null)}/>}
-      {modal?.type==="settle"       &&<ModalSettle name={modal.data.name} staffId={modal.data.staffId} balance={getBalance(modal.data.staffId)} onConfirm={handleSettle} onClose={()=>setModal(null)}/>}
+      {modal?.type==="settle"       &&<ModalSettle name={modal.data.name} staffId={modal.data.staffId} classes={enrichedClasses} onConfirm={handleSettle} onClose={()=>setModal(null)}/>}
       {modal?.type==="client_edit"  &&<ModalClientEdit data={modal.data} staff={staff} clients={clients} onSave={handleSaveClient} onClose={()=>setModal(null)}/>}
       {modal?.type==="staff_edit"   &&<ModalStaffEdit data={modal.data} config={config} onSave={handleSaveStaff} onClose={()=>setModal(null)}/>}
 {modal?.type==="extra_commission"&&<ModalExtraCommission staff={modal.data} onSave={async(amount,desc,date)=>{await addExtraCommission(modal.data.id,amount,desc,date);showToast("✓ Comisión registrada");setModal(null);}} onClose={()=>setModal(null)}/>}
