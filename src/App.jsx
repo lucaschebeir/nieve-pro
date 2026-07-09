@@ -315,7 +315,7 @@ function ModalClassEdit({data,staff,clients,classes,config,onSave,onClose}){
 
   // Grupos existentes del cliente seleccionado (solo para clases nuevas)
   const clientGroups=useMemo(()=>{
-    if(!isNew||!form.clientId) return [];
+    if(!form.clientId||data?.groupId) return [];
     const seen=new Set();
     const result=[];
     for(const c of (classes||[])){
@@ -422,7 +422,7 @@ function ModalClassEdit({data,staff,clients,classes,config,onSave,onClose}){
   setClassDates(Array.from({length:n},(_,i)=>classDates[i]||today));
 }}/>
           <Inp label="Cliente existente (opc.)" value={form.clientId} onChange={v=>{set("clientId",v);setSelectedGroupId(null);}} options={clients.map(c=>({value:c.id,label:c.name}))}/>
-          {isNew&&clientGroups.length>0&&(
+          {clientGroups.length>0&&(
             <Inp label="Agregar a grupo existente (opc.)" value={selectedGroupId||""} onChange={v=>setSelectedGroupId(v||null)} options={[{value:"",label:"— Nuevo grupo —"},...clientGroups.map(g=>({value:g.groupId,label:g.label}))]}/>
           )}
           <Inp label="Nombre Cliente / Familia" value={form.clientName} onChange={v=>set("clientName",v)} placeholder="Familia Johnson" required/>
