@@ -118,6 +118,8 @@ export function useClients() {
         .update(payload)
         .eq("id", clientData.id);
       if (error) throw error;
+      // sincronizar client_name en todas las clases de este cliente
+      await supabase.from("classes").update({ client_name: clientData.name }).eq("client_id", clientData.id);
     } else {
       const { error } = await supabase
         .from("clients")
