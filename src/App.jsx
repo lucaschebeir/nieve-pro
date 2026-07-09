@@ -645,7 +645,7 @@ function ModalSettle({name,staffId,classes,onConfirm,onClose}){
       .sort((a,b)=>a.classDate.localeCompare(b.classDate))
   ,[classes,staffId,start,end]);
   const toSettleWithEarn=useMemo(()=>toSettle.map(c=>{
-    const earn=(c.instructorId===staffId&&(c.scenario==="instructor_only"||c.scenario==="full"))?c.instructorEarning:c.sellerCommission;
+    const earn=(c.instructorId===staffId&&(c.scenario==="instructor_only"||c.scenario==="seller_and_instructor"))?c.instructorEarning:c.sellerCommission;
     return {...c,earn:earn||0};
   }),[toSettle,staffId]);
   const settleAmount=toSettleWithEarn.reduce((a,c)=>a+c.earn,0);
@@ -1362,7 +1362,7 @@ function StaffPage({staff,getBalance,settlements,clients,classes,extraCommission
     const bal=getBalance(viewStaff.id);
     const myClasses=classes.filter(c=>c.sellerId===viewStaff.id||c.instructorId===viewStaff.id).sort((a,b)=>b.classDate?.localeCompare(a.classDate));
     const pendingPast=myClasses.filter(c=>!c.isSettled&&c.classDone).reduce((a,c)=>{
-      const earn=(c.instructorId===viewStaff.id&&(c.scenario==="instructor_only"||c.scenario==="full"))?c.instructorEarning:c.sellerCommission;
+      const earn=(c.instructorId===viewStaff.id&&(c.scenario==="instructor_only"||c.scenario==="seller_and_instructor"))?c.instructorEarning:c.sellerCommission;
       return a+(earn||0);
     },0);
     const mySettlements=settlements.filter(s=>s.staffId===viewStaff.id);
