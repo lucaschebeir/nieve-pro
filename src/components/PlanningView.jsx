@@ -1,6 +1,18 @@
 // src/components/PlanningView.jsx
 // Módulo de Planning — grilla semanal (admin) y agenda diaria (instructor)
 
+const INSTR_ORDER_LAST  = ["julian","gastón","gaston","matías","matias"];
+const INSTR_ORDER_SEMI  = ["felipe","pablo"];
+function instrSortKey(name = "") {
+  const n = name.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  if (INSTR_ORDER_LAST.some(k => n.startsWith(k))) return 2;
+  if (INSTR_ORDER_SEMI.some(k => n.startsWith(k))) return 1;
+  return 0;
+}
+function sortInstructors(arr) {
+  return [...arr].sort((a, b) => instrSortKey(a.name) - instrSortKey(b.name));
+}
+
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { supabase } from "../supabase";
 import {
@@ -638,7 +650,7 @@ function PlanningAdminView({ classes, staff, onUpdate, onEdit, onDelete, initial
   const [overlapWarn, setOverlapWarn] = useState(null);
 
   const weekDays = getWeekDays(anchorDate);
-  const instructors = staff.filter(s => s.role === "instructor" || s.role === "both");
+  const instructors = sortInstructors(staff.filter(s => s.role === "instructor" || s.role === "both"));
 
   // Clases del día seleccionado
   const dayClasses = classes.filter(c => c.classDate === selectedDate);
@@ -1259,7 +1271,7 @@ function PlanningWeekOverview({ classes, staff, onEdit, onUpdate, initialDate, o
       .map(c => c.instructorId)
       .filter((id, i, arr) => arr.indexOf(id) === i);
     const extra = extraIds.map(id => staff.find(s => s.id === id)).filter(Boolean);
-    return [...activeInstr, ...extra];
+    return sortInstructors([...activeInstr, ...extra]);
   }, [staff, classes, weekDays]);
 
   const hasUnassigned = useMemo(() =>
