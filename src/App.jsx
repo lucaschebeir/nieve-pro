@@ -641,7 +641,7 @@ function ModalSettle({name,staffId,classes,onConfirm,onClose}){
   const [saving,setSaving]=useState(false);
   const [showDetail,setShowDetail]=useState(false);
   const toSettle=useMemo(()=>
-    (classes||[]).filter(c=>c.classDone&&!c.isSettled&&c.classDate>=start&&c.classDate<=end&&(c.instructorId===staffId||c.sellerId===staffId))
+    (classes||[]).filter(c=>(c.classDone||c.classDate<today)&&!c.isSettled&&c.classDate>=start&&c.classDate<=end&&(c.instructorId===staffId||c.sellerId===staffId))
       .sort((a,b)=>a.classDate.localeCompare(b.classDate))
   ,[classes,staffId,start,end]);
   const toSettleWithEarn=useMemo(()=>toSettle.map(c=>{
@@ -958,6 +958,14 @@ function AdminApp() {
 // Estas páginas son idénticas a las del simulador NieveProApp_v2.jsx
 // Solo cambia que reciben datos reales en lugar de mock
 
+function calcPendingPast(classes, staffId){
+  return classes.filter(c=>!c.isSettled&&(c.classDone||c.classDate<today)&&(c.instructorId===staffId||c.sellerId===staffId))
+    .reduce((a,c)=>{
+      const earn=(c.instructorId===staffId&&(c.scenario==="instructor_only"||c.scenario==="seller_and_instructor"))?c.instructorEarning:c.sellerCommission;
+      return a+(earn||0);
+    },0);
+}
+
 function DashboardPage({staff,classes,settlements,clients,getBalance,onSettle,onToggle,onViewStaff}){
   const [season,setSeason]=useState("current");
   const {sfrom,sto}=useMemo(()=>{
@@ -966,7 +974,8 @@ function DashboardPage({staff,classes,settlements,clients,getBalance,onSettle,on
     return {sfrom:"2000-01-01",sto:"2099-12-31"};
   },[season]);
   const seasonClasses=useMemo(()=>classes.filter(c=>c.classDate>=sfrom&&c.classDate<=sto),[classes,sfrom,sto]);
-  const totalPending=staff.reduce((a,s)=>a+getBalance(s.id).pendingAmount,0);
+  const pendingMap=useMemo(()=>{const m={};staff.forEach(s=>{m[s.id]=calcPendingPast(classes,s.id);});return m;},[classes,staff]);
+  const totalPending=staff.reduce((a,s)=>a+(pendingMap[s.id]||0),0);
   const totalSettled=settlements.filter(s=>s.settledAt>=sfrom&&s.settledAt<=sto).reduce((a,s)=>a+s.totalEarned,0);
   const unassigned=seasonClasses.filter(c=>!c.isSettled&&c.instructorStatus==="unassigned").length;
   return(
@@ -989,7 +998,7 @@ function DashboardPage({staff,classes,settlements,clients,getBalance,onSettle,on
       <SectionTitle>Cuentas Corrientes</SectionTitle>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(290px,1fr))",gap:14}}>
         {staff.map(s=>{
-          const bal=getBalance(s.id);
+          const pending=pendingMap[s.id]||0;
           const hist=settlements.filter(st=>st.staffId===s.id).reduce((a,h)=>a+h.totalEarned,0);
           const rc=ROLE_COLORS[s.role];
           return(
@@ -1005,8 +1014,7 @@ function DashboardPage({staff,classes,settlements,clients,getBalance,onSettle,on
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
                 <div style={{background:`${T.gold}0d`,border:`1px solid ${T.gold}25`,borderRadius:8,padding:"10px 12px"}}>
                   <div style={{fontSize:10,color:T.textDim,textTransform:"uppercase"}}>A PAGAR</div>
-                  <div style={{fontSize:18,fontWeight:900,color:bal.pendingAmount>0?T.gold:T.muted,fontFamily:"monospace",marginTop:2}}>{fmt(bal.pendingAmount)}</div>
-                  <div style={{fontSize:11,color:T.muted}}>{bal.pendingClasses} clase(s)</div>
+                  <div style={{fontSize:18,fontWeight:900,color:pending>0?T.gold:T.muted,fontFamily:"monospace",marginTop:2}}>{fmt(pending)}</div>
                 </div>
                 <div style={{background:`${T.green}0d`,border:`1px solid ${T.green}25`,borderRadius:8,padding:"10px 12px"}}>
                   <div style={{fontSize:10,color:T.textDim,textTransform:"uppercase"}}>LIQUIDADO</div>
@@ -1014,7 +1022,7 @@ function DashboardPage({staff,classes,settlements,clients,getBalance,onSettle,on
                 </div>
               </div>
               <div style={{display:"flex",gap:8}}>
-                <Btn variant="gold" size="sm" disabled={bal.pendingAmount===0||!s.isActive} onClick={()=>onSettle(s)} style={{flex:1}}>✓ Liquidar</Btn>
+                <Btn variant="gold" size="sm" disabled={pending===0||!s.isActive} onClick={()=>onSettle(s)} style={{flex:1}}>✓ Liquidar</Btn>
                 <Btn variant="ghost" size="sm" onClick={()=>onViewStaff(s)}>Ficha →</Btn>
               </div>
             </Card>
@@ -1357,11 +1365,12 @@ function StaffPage({staff,getBalance,settlements,clients,classes,extraCommission
   const [viewId,setViewId]=useState(selectedStaffId||null);
   const [staffTab,setStaffTab]=useState("pending");
   const [selClient,setSelClient]=useState(null);
+  const pendingMap=useMemo(()=>{const m={};staff.forEach(s=>{m[s.id]=calcPendingPast(classes,s.id);});return m;},[classes,staff]);
   const viewStaff=viewId?staff.find(s=>s.id===viewId):null;
   if(viewStaff){
     const bal=getBalance(viewStaff.id);
     const myClasses=classes.filter(c=>c.sellerId===viewStaff.id||c.instructorId===viewStaff.id).sort((a,b)=>b.classDate?.localeCompare(a.classDate));
-    const pendingPast=myClasses.filter(c=>!c.isSettled&&c.classDone).reduce((a,c)=>{
+    const pendingPast=myClasses.filter(c=>!c.isSettled&&(c.classDone||c.classDate<today)).reduce((a,c)=>{
       const earn=(c.instructorId===viewStaff.id&&(c.scenario==="instructor_only"||c.scenario==="seller_and_instructor"))?c.instructorEarning:c.sellerCommission;
       return a+(earn||0);
     },0);
@@ -1448,7 +1457,7 @@ function StaffPage({staff,getBalance,settlements,clients,classes,extraCommission
           <thead><tr>{["","Nombre","Rol","Comisión","$/hora","Clientes","A Pagar","Liquidado","Acciones"].map(h=><TH key={h}>{h}</TH>)}</tr></thead>
           <tbody>
             {staff.map(s=>{
-              const bal=getBalance(s.id);
+              const pending=pendingMap[s.id]||0;
               const hist=settlements.filter(st=>st.staffId===s.id).reduce((a,st)=>a+st.totalEarned,0);
               const myC=clients.filter(c=>c.sellerId===s.id).length;
               const rc=ROLE_COLORS[s.role];
@@ -1459,9 +1468,9 @@ function StaffPage({staff,getBalance,settlements,clients,classes,extraCommission
                 <TD style={{fontFamily:"monospace",fontSize:13}}>{s.role!=="instructor"?`${s.commissionPct}%`:"—"}</TD>
                 <TD style={{fontFamily:"monospace",fontSize:13}}>{s.role!=="seller"&&s.role!=="admin"?`${fmt(s.hourlyRate)}/h`:"—"}</TD>
                 <TD style={{fontFamily:"monospace",color:T.cyan}}>{myC||"—"}</TD>
-                <TD style={{fontFamily:"monospace",color:bal.pendingAmount>0?T.gold:T.muted,fontWeight:700}}>{fmt(bal.pendingAmount)}</TD>
+                <TD style={{fontFamily:"monospace",color:pending>0?T.gold:T.muted,fontWeight:700}}>{fmt(pending)}</TD>
                 <TD style={{fontFamily:"monospace",color:T.green}}>{fmt(hist)}</TD>
-                <TD><div style={{display:"flex",gap:6}}><Btn variant="ghost" size="sm" onClick={()=>setViewId(s.id)}>Ficha</Btn><Btn variant="ghost" size="sm" onClick={()=>onEdit(s)}>✎</Btn><Btn variant="gold" size="sm" disabled={bal.pendingAmount===0||!s.isActive} onClick={()=>onSettle(s)}>$</Btn></div></TD>
+                <TD><div style={{display:"flex",gap:6}}><Btn variant="ghost" size="sm" onClick={()=>setViewId(s.id)}>Ficha</Btn><Btn variant="ghost" size="sm" onClick={()=>onEdit(s)}>✎</Btn><Btn variant="gold" size="sm" disabled={pending===0||!s.isActive} onClick={()=>onSettle(s)}>$</Btn></div></TD>
               </tr>);
             })}
           </tbody>
