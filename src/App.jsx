@@ -356,16 +356,18 @@ function ModalClassEdit({data,staff,clients,classes,config,onSave,onClose}){
     if(form.classTypeId===_halfDayId&&!form.horarioInicio){ alert("Elegí el turno del Half Day: Mañana o Tarde."); return; }
     setSaving(true);
     try {
-      const groupId = selectedGroupId || (isNew && classDates.length > 1 ? crypto.randomUUID() : (data?.groupId || null));
+      const groupId = selectedGroupId || (classDates.length > 1 ? (data?.groupId || crypto.randomUUID()) : (data?.groupId || null));
       const depositNum = +totalDeposit || 0;
       const n = classDates.length;
-      const base = isNew && n > 1 && totalDeposit ? Math.round(depositNum / n * 100) / 100 : null;
+      const base = n > 1 && totalDeposit ? Math.round(depositNum / n * 100) / 100 : null;
       for (let i = 0; i < classDates.length; i++) {
         const deposit = base !== null
           ? (i === n - 1 ? Math.round((depositNum - base * (n - 1)) * 100) / 100 : base)
           : null;
         const reservationAmount = deposit !== null ? String(deposit) : form.reservationAmount;
-        await onSave({...form, id: isNew?undefined:data?.id, classDate: classDates[i], groupId, reservationAmount});
+        // solo la primera iteración usa el id existente; las demás crean clases nuevas
+        const id = i === 0 ? (isNew ? undefined : data?.id) : undefined;
+        await onSave({...form, id, classDate: classDates[i], groupId, reservationAmount});
       }
     }
     catch(e){ alert("Error guardando: "+e.message); }
