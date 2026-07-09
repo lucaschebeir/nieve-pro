@@ -360,15 +360,15 @@ function ModalClassEdit({data,staff,clients,classes,config,onSave,onClose}){
       const depositNum = +totalDeposit || 0;
       const n = classDates.length;
       const base = n > 1 && totalDeposit ? Math.round(depositNum / n * 100) / 100 : null;
-      for (let i = 0; i < classDates.length; i++) {
+      const forms = classDates.map((date, i) => {
         const deposit = base !== null
           ? (i === n - 1 ? Math.round((depositNum - base * (n - 1)) * 100) / 100 : base)
           : null;
         const reservationAmount = deposit !== null ? String(deposit) : form.reservationAmount;
-        // solo la primera iteración usa el id existente; las demás crean clases nuevas
         const id = i === 0 ? (isNew ? undefined : data?.id) : undefined;
-        await onSave({...form, id, classDate: classDates[i], groupId, reservationAmount});
-      }
+        return {...form, id, classDate: date, groupId, reservationAmount};
+      });
+      await onSave(forms);
     }
     catch(e){ alert("Error guardando: "+e.message); }
     finally{ setSaving(false); }
@@ -748,10 +748,11 @@ function AdminApp() {
 
   const pendingBalances = useMemo(() => staff.map(s => getBalance(s.id)), [staff, getBalance]);
 
-  async function handleSaveClass(f) {
-    await saveClass(f);
+  async function handleSaveClass(forms) {
+    const arr = Array.isArray(forms) ? forms : [forms];
+    for (const f of arr) await saveClass(f);
     await refetchBalances();
-    showToast(f.id ? "✓ Clase actualizada" : "✓ Clase registrada");
+    showToast(arr.length > 1 ? `✓ ${arr.length} clases guardadas` : arr[0].id ? "✓ Clase actualizada" : "✓ Clase registrada");
     setModal(null);
   }
   async function handleSaveClient(data) {
