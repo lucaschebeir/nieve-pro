@@ -300,7 +300,7 @@ function DraggableChip({ cls, color, onEdit, onDelete }) {
 }
 
 // ─── DRAGGABLE CLASS BLOCK (bloque en la línea de tiempo) ────────────────────
-function ClassBlock({ cls, pxPerMin, color, onEdit, onDelete, blockTop, blockHeight, alwaysShowBadge }) {
+function ClassBlock({ cls, pxPerMin, color, onEdit, onDelete, blockTop, blockHeight, alwaysShowBadge, onConfirm }) {
   const startMin = timeToMin(cls.horarioInicio);
   const dur = classDuration(cls);
   const left = (startMin - DAY_START_MIN) * pxPerMin;
@@ -342,6 +342,22 @@ function ClassBlock({ cls, pxPerMin, color, onEdit, onDelete, blockTop, blockHei
           WebkitBoxOrient: "vertical" }}>
           {cls.notes}
         </div>
+      )}
+      {/* Indicador de confirmación instructor (solo admin) */}
+      {cls.instructorId && !onConfirm && (
+        <div onPointerDown={e=>e.stopPropagation()} title={cls.confirmedByInstructor?"Instructor confirmó":"Sin confirmar"}
+          style={{position:"absolute",top:3,left:3,width:7,height:7,borderRadius:"50%",
+            background:cls.confirmedByInstructor?"#22c55e":"#f97316"}}/>
+      )}
+      {/* Botón confirmar (solo vista instructor) */}
+      {onConfirm && cls.instructorId && !cls.confirmedByInstructor && (
+        <button onPointerDown={e=>e.stopPropagation()} onClick={()=>onConfirm(cls.id)}
+          style={{position:"absolute",bottom:3,right:3,background:"#22c55e22",border:"1px solid #22c55e80",
+            color:"#22c55e",cursor:"pointer",fontSize:9,padding:"1px 5px",borderRadius:3,fontFamily:"inherit"}}
+          title="Marcar como visto">✓ Visto</button>
+      )}
+      {onConfirm && cls.confirmedByInstructor && (
+        <div style={{position:"absolute",bottom:3,right:3,fontSize:9,color:"#22c55e",fontWeight:700}}>✓ Visto</div>
       )}
       {/* Botones editar / eliminar */}
       {(onEdit || onDelete) && (
@@ -927,7 +943,7 @@ const PAY_INFO = {
   paid:     { label: "Pago Total",   color: T.green  },
 };
 
-export function PlanningInstructorView({ classes, staffMember, staff = [] }) {
+export function PlanningInstructorView({ classes, staffMember, staff = [], onConfirm }) {
   const [anchorDate, setAnchorDate] = useState(todayStr());
   const [unavailByDate, setUnavailByDate] = useState(new Map());
   const [groupMatesMap, setGroupMatesMap] = useState({});
@@ -1038,6 +1054,18 @@ export function PlanningInstructorView({ classes, staffMember, staff = [] }) {
             border: `1px solid ${T.cyan}30`, borderRadius: 7, padding: "5px 10px" }}>
             👥 Instructores en esta reserva: {groupMates.join(", ")}
           </div>
+        )}
+        {onConfirm && (
+          c.confirmedByInstructor
+            ? <div style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"#22c55e",fontWeight:700}}>
+                ✓ Visto
+              </div>
+            : <button onClick={()=>onConfirm(c.id)}
+                style={{alignSelf:"flex-start",background:"#22c55e22",border:"1px solid #22c55e80",
+                  color:"#22c55e",cursor:"pointer",fontSize:12,fontWeight:700,
+                  padding:"6px 14px",borderRadius:8,fontFamily:"inherit"}}>
+                ✓ Marcar como visto
+              </button>
         )}
       </div>
     );
@@ -1446,7 +1474,7 @@ function PlanningMonthOverview({ classes, staff, onEdit, onSwitchToDay }) {
 }
 
 // ─── EXPORT PRINCIPAL ─────────────────────────────────────────────────────────
-export default function PlanningView({ classes, staff, isAdmin, staffProfile, onUpdate, onEdit, onDelete }) {
+export default function PlanningView({ classes, staff, isAdmin, staffProfile, onUpdate, onEdit, onDelete, onConfirm }) {
   const [viewType, setViewType] = useState("day"); // "day" | "week" | "month"
   const [sharedDate, setSharedDate] = useState(todayStr());
 
@@ -1482,7 +1510,7 @@ export default function PlanningView({ classes, staff, isAdmin, staffProfile, on
           {viewType === "month" && <PlanningMonthOverview classes={classes} staff={staff} onEdit={onEdit} onSwitchToDay={switchToDay} />}
         </>
       ) : (
-        <PlanningInstructorView classes={classes} staffMember={staffProfile} />
+        <PlanningInstructorView classes={classes} staffMember={staffProfile} onConfirm={onConfirm} />
       )}
     </div>
   );

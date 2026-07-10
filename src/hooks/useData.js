@@ -204,8 +204,9 @@ export function useClasses() {
       class_done:          !!formData.classDone,
       discipline:          formData.discipline || "ski",
       is_required:         !!formData.isRequired,
-      horario_inicio:      formData.horarioInicio || null,
-      group_id:            formData.groupId || null,
+      horario_inicio:           formData.horarioInicio || null,
+      group_id:                 formData.groupId || null,
+      confirmed_by_instructor:  !!formData.confirmedByInstructor,
     };
 
     const count = +formData.daysCount || 1;
@@ -254,15 +255,22 @@ export function useClasses() {
     isSettled:           c.is_settled,
     settlementId:        c.settlement_id,
     horarioInicio:       c.horario_inicio ? c.horario_inicio.slice(0, 5) : null,
-    createdAt:           c.created_at?.split("T")[0],
-    groupId:             c.group_id || null,
+    createdAt:              c.created_at?.split("T")[0],
+    groupId:                c.group_id || null,
+    confirmedByInstructor:  !!c.confirmed_by_instructor,
   }));
 
   async function updateClassSchedule(classId, { instructorId, horarioInicio }) {
     const patch = {};
-    if (instructorId !== undefined) patch.instructor_id = instructorId || null;
+    if (instructorId !== undefined) { patch.instructor_id = instructorId || null; patch.confirmed_by_instructor = false; }
     if (horarioInicio !== undefined) patch.horario_inicio = horarioInicio || null;
     const { error } = await supabase.from("classes").update(patch).eq("id", classId);
+    if (error) throw error;
+    refetch();
+  }
+
+  async function confirmClass(classId) {
+    const { error } = await supabase.from("classes").update({ confirmed_by_instructor: true }).eq("id", classId);
     if (error) throw error;
     refetch();
   }
@@ -299,7 +307,7 @@ export function useClasses() {
     refetch();
   }
 
-  return { classes: mapped, loading, error, refetch, saveClass, deleteClass, updateClassSchedule, groupClasses, ungroupClasses, registerGroupPayment };
+  return { classes: mapped, loading, error, refetch, saveClass, deleteClass, updateClassSchedule, confirmClass, groupClasses, ungroupClasses, registerGroupPayment };
 }
 
 // ─── SETTLEMENTS ──────────────────────────────────────────────

@@ -717,7 +717,7 @@ function AdminApp() {
   const { staffProfile, signOut, isAdmin, isViewer, session } = useAuth();
   const { staff, loading: sL, toggleActive, saveStaff } = useStaff();
   const { clients, loading: cL, saveClient } = useClients();
-  const { classes, loading: clL, saveClass, deleteClass, updateClassSchedule, groupClasses, ungroupClasses, registerGroupPayment } = useClasses();
+  const { classes, loading: clL, saveClass, deleteClass, updateClassSchedule, confirmClass, groupClasses, ungroupClasses, registerGroupPayment } = useClasses();
   const { settlements, loading: stL, settlePeriod } = useSettlements();
   const { expenses, loading: eL, addExpense } = useExpenses();
   const { extraCommissions, addExtraCommission, settleExtraCommissions, deleteExtraCommission, refetch: refetchExtra } = useExtraCommissions();
@@ -750,7 +750,14 @@ function AdminApp() {
 
   async function handleSaveClass(forms) {
     const arr = Array.isArray(forms) ? forms : [forms];
-    for (const f of arr) await saveClass(f);
+    for (const f of arr) {
+      if (f.id) {
+        const orig = enrichedClasses.find(c => c.id === f.id);
+        if (orig && (orig.instructorId !== f.instructorId || orig.classDate !== f.classDate))
+          f.confirmedByInstructor = false;
+      }
+      await saveClass(f);
+    }
     await refetchBalances();
     showToast(arr.length > 1 ? `✓ ${arr.length} clases guardadas` : arr[0].id ? "✓ Clase actualizada" : "✓ Clase registrada");
     setModal(null);
@@ -891,7 +898,7 @@ function AdminApp() {
 
   // Staff no-admin y no-viewer va directo a su portal personal
   if (!isAdmin && !isViewer) {
-    return <StaffPortalPage staffMember={staffProfile} staff={staff} classes={enrichedClasses} settlements={settlements} clients={clients} balance={getBalance(staffProfile?.id)} onSignOut={signOut}/>;
+    return <StaffPortalPage staffMember={staffProfile} staff={staff} classes={enrichedClasses} settlements={settlements} clients={clients} balance={getBalance(staffProfile?.id)} onConfirm={confirmClass} onSignOut={signOut}/>;
   }
 
   const NAV = [
@@ -935,7 +942,7 @@ function AdminApp() {
       </div>
       {/* PAGES */}
       <div style={{padding:24,maxWidth:1360,margin:"0 auto"}}>
-        {page==="planning" &&<PlanningView classes={enrichedClasses} staff={staff} isAdmin={true} onUpdate={isViewer?undefined:updateClassSchedule} onEdit={isViewer?undefined:c=>setModal({type:"class_edit",data:c})} onDelete={isViewer?undefined:async(id)=>{await deleteClass(id);showToast("✓ Clase eliminada")}}/>}
+        {page==="planning" &&<PlanningView classes={enrichedClasses} staff={staff} isAdmin={true} onUpdate={isViewer?undefined:updateClassSchedule} onEdit={isViewer?undefined:c=>setModal({type:"class_edit",data:c})} onDelete={isViewer?undefined:async(id)=>{await deleteClass(id);showToast("✓ Clase eliminada")}} onConfirm={confirmClass}/>}
         {page==="dashboard"&&<DashboardPage staff={staff} classes={enrichedClasses} settlements={settlements} clients={clients} getBalance={getBalance} onSettle={isViewer?undefined:s=>setModal({type:"settle",data:{staffId:s.id,name:s.name}})} onToggle={isViewer?undefined:handleToggle} onViewStaff={s=>{setSelectedStaffId(s.id);setPage("staff");}}/>}
         {page==="classes"  &&<ClassesPage classes={enrichedClasses} staff={staff} clients={clients} onEdit={isViewer?undefined:c=>setModal({type:"class_edit",data:c})} onNew={isViewer?undefined:()=>setModal({type:"class_edit",data:null})} onClientClick={goToClient} onFinanceClick={c=>setModal({type:"class_finance",data:c})} onDelete={isViewer?undefined:async(id)=>{await deleteClass(id);showToast("✓ Clase eliminada")}} onGroupClasses={isViewer?undefined:groupClasses} onUngroupClasses={isViewer?undefined:ungroupClasses} onGroupPayment={isViewer?undefined:registerGroupPayment}/>}
         {page==="clients"  &&<ClientsPage clients={clients} staff={staff} classes={enrichedClasses} selectedClientId={selectedClientId} onClearSelected={()=>setSelectedClientId(null)} onEdit={isViewer?undefined:c=>setModal({type:"client_edit",data:c})} onNew={isViewer?undefined:()=>setModal({type:"client_edit",data:null})}/>}
@@ -1806,7 +1813,7 @@ function ConfigPage({config,onSave,staff,onSaveStaff}){
 }
 
 // ─── STAFF PORTAL (vista del staff logueado) ──────────────────────────────────
-function StaffPortalPage({ staffMember, staff, classes, settlements, clients, balance, onSignOut }) {
+function StaffPortalPage({ staffMember, staff, classes, settlements, clients, balance, onConfirm, onSignOut }) {
   const myClasses = classes
     .filter(c => c.sellerId === staffMember?.id || c.instructorId === staffMember?.id)
     .sort((a, b) => b.classDate?.localeCompare(a.classDate));
@@ -2040,7 +2047,7 @@ function StaffPortalPage({ staffMember, staff, classes, settlements, clients, ba
 
         {/* Tab: Mi Agenda — solo visible para instructores, filtra por su propio id */}
         {tab === "agenda" && (
-          <PlanningInstructorView classes={classes} staffMember={staffMember} staff={staff} />
+          <PlanningInstructorView classes={classes} staffMember={staffMember} staff={staff} onConfirm={onConfirm} />
         )}
       </div>
     </div>
