@@ -1827,6 +1827,8 @@ function StaffPortalPage({ staffMember, staff, classes, settlements, clients, ba
 
   const pendingClasses  = myClasses.filter(c => !c.isSettled);
   const settledClasses  = myClasses.filter(c => c.isSettled);
+  const pendingPast     = calcPendingPast(classes, staffMember?.id);
+  const pendingPastCount= myClasses.filter(c => !c.isSettled && (c.classDone || c.classDate < today)).length;
 
   return (
     <div style={{ minHeight: "100vh", background: T.bg, color: T.text, fontFamily: "'DM Sans','Segoe UI',system-ui,sans-serif" }}>
@@ -1847,7 +1849,7 @@ function StaffPortalPage({ staffMember, staff, classes, settlements, clients, ba
         {/* KPIs */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 12, marginBottom: 24 }}>
           <Card style={{ background: `${T.gold}0d`, borderColor: `${T.gold}25` }}>
-            <Stat label="A Cobrar" value={fmt(balance?.pendingAmount || 0)} color={T.gold} sub={`${balance?.pendingClasses || 0} clase(s)`} />
+            <Stat label="A Cobrar" value={fmt(pendingPast)} color={T.gold} sub={`${pendingPastCount} clase(s) dadas`} />
           </Card>
           <Card>
             <Stat label="Liquidado" value={fmt(mySettlements.reduce((a, s) => a + s.totalEarned, 0))} color={T.green} />
