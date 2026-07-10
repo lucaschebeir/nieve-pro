@@ -1883,49 +1883,54 @@ function StaffPortalPage({ staffMember, staff, classes, settlements, clients, ba
         </div>
 
         {/* Tab: Clases Pendientes */}
-        {tab === "pending" && (
-          <Card style={{ padding: 0, overflow: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 560 }}>
-              <thead>
-                <tr>
-                  {["Fecha", "Cliente", "Tipo", isSeller ? "Monto" : "Horas", "Est. Pago", "Mi Ganancia"].map(h => <TH key={h}>{h}</TH>)}
-                </tr>
-              </thead>
-              <tbody>
-                {pendingClasses.map(c => {
-                  const isPureInstr = c.instructorId === staffMember?.id && c.sellerId !== staffMember?.id;
-                  const earn = isPureInstr ? c.instructorEarning : c.sellerCommission;
-                  const ps = PAY_STATUS[c.paymentStatus];
-                  return (
-                    <tr key={c.id} style={{ borderLeft: `3px solid ${ps?.color || T.border}40` }}>
-                      <TD style={{ fontSize: 12, color: T.textDim }}>{fmtDate(c.classDate)}</TD>
-                      <TD style={{ fontWeight: 700 }}>{c.clientName}</TD>
-                      <TD><Badge text={c.classTypeName || "—"} color={T.muted} small /></TD>
-                      <TD>
-                        {isPureInstr ? (
-                          <div>
-                            <div style={{ fontFamily: "monospace", color: T.purple, fontWeight: 700 }}>{c.instructorHours}h</div>
-                            <div style={{ fontSize: 11, color: T.textDim }}>{fmt(c.instructorHourlyRate)}/h</div>
-                          </div>
-                        ) : (
-                          <div>
-                            <div style={{ fontFamily: "monospace", fontWeight: 700 }}>{fmt(c.amount)}</div>
-                            <PayBar amount={c.amount} paidAmount={c.paidAmount} />
-                          </div>
-                        )}
-                      </TD>
-                      <TD><PayBadge status={c.paymentStatus} /></TD>
-                      <TD style={{ fontFamily: "monospace", color: T.cyan, fontWeight: 800 }}>{fmt(earn)}</TD>
-                    </tr>
-                  );
-                })}
-                {pendingClasses.length === 0 && (
-                  <tr><td colSpan={6}><Empty text="Sin clases pendientes" /></td></tr>
-                )}
-              </tbody>
-            </table>
-          </Card>
-        )}
+        {tab === "pending" && (()=>{
+          const dadas   = pendingClasses.filter(c => c.classDone || c.classDate < today);
+          const futuras = pendingClasses.filter(c => !c.classDone && c.classDate >= today);
+          const cols    = ["Fecha","Cliente","Tipo",isSeller?"Monto":"Horas","Est. Pago","Mi Ganancia"];
+          function PendingRow({c}){
+            const isPureInstr = c.instructorId===staffMember?.id && c.sellerId!==staffMember?.id;
+            const earn = isPureInstr ? c.instructorEarning : c.sellerCommission;
+            const ps = PAY_STATUS[c.paymentStatus];
+            return(
+              <tr key={c.id} style={{borderLeft:`3px solid ${ps?.color||T.border}40`}}>
+                <TD style={{fontSize:12,color:T.textDim}}>{fmtDate(c.classDate)}</TD>
+                <TD style={{fontWeight:700}}>{c.clientName}</TD>
+                <TD><Badge text={c.classTypeName||"—"} color={T.muted} small/></TD>
+                <TD>{isPureInstr?(<div><div style={{fontFamily:"monospace",color:T.purple,fontWeight:700}}>{c.instructorHours}h</div><div style={{fontSize:11,color:T.textDim}}>{fmt(c.instructorHourlyRate)}/h</div></div>):(<div><div style={{fontFamily:"monospace",fontWeight:700}}>{fmt(c.amount)}</div><PayBar amount={c.amount} paidAmount={c.paidAmount}/></div>)}</TD>
+                <TD><PayBadge status={c.paymentStatus}/></TD>
+                <TD style={{fontFamily:"monospace",color:T.cyan,fontWeight:800}}>{fmt(earn)}</TD>
+              </tr>
+            );
+          }
+          return(
+            <div style={{display:"flex",flexDirection:"column",gap:16}}>
+              <Card style={{padding:0,overflow:"auto"}}>
+                <div style={{padding:"10px 16px",borderBottom:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <span style={{fontWeight:700,fontSize:13}}>A cobrar — clases ya dadas</span>
+                  <span style={{fontFamily:"monospace",color:T.gold,fontWeight:800}}>{fmt(pendingPast)}</span>
+                </div>
+                <table style={{width:"100%",borderCollapse:"collapse",minWidth:560}}>
+                  <thead><tr>{cols.map(h=><TH key={h}>{h}</TH>)}</tr></thead>
+                  <tbody>
+                    {dadas.map(c=><PendingRow key={c.id} c={c}/>)}
+                    {dadas.length===0&&<tr><td colSpan={6}><Empty text="Sin clases dadas pendientes"/></td></tr>}
+                  </tbody>
+                </table>
+              </Card>
+              {futuras.length>0&&(
+                <Card style={{padding:0,overflow:"auto"}}>
+                  <div style={{padding:"10px 16px",borderBottom:`1px solid ${T.border}`}}>
+                    <span style={{fontWeight:700,fontSize:13,color:T.textDim}}>Próximas clases</span>
+                  </div>
+                  <table style={{width:"100%",borderCollapse:"collapse",minWidth:560}}>
+                    <thead><tr>{cols.map(h=><TH key={h}>{h}</TH>)}</tr></thead>
+                    <tbody>{futuras.map(c=><PendingRow key={c.id} c={c}/>)}</tbody>
+                  </table>
+                </Card>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Tab: Historial */}
         {tab === "history" && (
