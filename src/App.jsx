@@ -717,7 +717,7 @@ function AdminApp() {
   const { staffProfile, signOut, isAdmin, isViewer, session } = useAuth();
   const { staff, loading: sL, toggleActive, saveStaff } = useStaff();
   const { clients, loading: cL, saveClient } = useClients();
-  const { classes, loading: clL, saveClass, deleteClass, updateClassSchedule, confirmClass, groupClasses, ungroupClasses, registerGroupPayment } = useClasses();
+  const { classes, loading: clL, saveClass, deleteClass, updateClassSchedule, confirmClass, groupClasses, ungroupClasses, registerGroupPayment, refetch: refetchClasses } = useClasses();
   const { settlements, loading: stL, settlePeriod } = useSettlements();
   const { expenses, loading: eL, addExpense } = useExpenses();
   const { extraCommissions, addExtraCommission, settleExtraCommissions, deleteExtraCommission, refetch: refetchExtra } = useExtraCommissions();
@@ -771,6 +771,28 @@ function AdminApp() {
     await saveStaff(data);
     showToast(data.id ? "✓ Staff actualizado" : "✓ Staff creado");
     setModal(null);
+  }
+  async function handleRecalculateClasses(staffId) {
+    const toUpdate = enrichedClasses.filter(c => c.sellerId === staffId || c.instructorId === staffId);
+    for (const c of toUpdate) {
+      const scenario = calcScenario(c.sellerId, c.instructorId);
+      const seller = staff.find(s => s.id === c.sellerId);
+      const instructor = staff.find(s => s.id === c.instructorId);
+      const ownPerson = scenario === "own_class" ? (seller || instructor) : null;
+      const schoolCutPct = ownPerson?.isOwner ? 0 : (config.schoolCutPct || 0);
+      const hours = c.instructorHours || 0;
+      const earnings = calcEarnings(c.amount, scenario, seller, instructor, schoolCutPct, hours);
+      const { error } = await supabase.from("classes").update({
+        scenario,
+        seller_commission:    earnings.sellerCommission,
+        instructor_earning:   earnings.instructorEarning,
+        school_cut:           earnings.schoolCut,
+        instructor_hourly_rate: earnings.instructorHourlyRate || null,
+      }).eq("id", c.id);
+      if (error) throw error;
+    }
+    await refetchClasses();
+    showToast(`✓ ${toUpdate.length} clases recalculadas`);
   }
   async function handleSettle(staffId, start, end, method, notes) {
     await settlePeriod(staffId, start, end, method, notes);
@@ -950,7 +972,7 @@ function AdminApp() {
         {page==="finanzas" &&<FinanzasPage classes={enrichedClasses} expenses={expenses} staff={staff} config={config} onAddExpense={isViewer?undefined:addExpense}/>}
         {page==="stats"    &&<EstadisticasPage classes={enrichedClasses} staff={staff} clients={clients} config={config}/>}
         {page==="search"   &&<SearchPage clients={clients} classes={enrichedClasses} staff={staff} onViewClient={c=>{setSelectedClientId(c.id);setPage("clients");}}/>}
-        {page==="config"   &&<ConfigPage config={config} onSave={async (c)=>{await saveConfig(c);showToast("✓ Configuración guardada");}} staff={staff} onSaveStaff={handleSaveStaff}/>}
+        {page==="config"   &&<ConfigPage config={config} onSave={async (c)=>{await saveConfig(c);showToast("✓ Configuración guardada");}} staff={staff} onSaveStaff={handleSaveStaff} onRecalculate={handleRecalculateClasses}/>}
       </div>
       {/* MODALS */}
       {modal?.type==="class_edit"   &&<ModalClassEdit data={modal.data} staff={staff} clients={clients} classes={enrichedClasses} config={config} onSave={handleSaveClass} onClose={()=>setModal(null)}/>}
@@ -1770,7 +1792,7 @@ function SearchPage({clients,classes,staff,onViewClient}){
   );
 }
 
-function ConfigPage({config,onSave,staff,onSaveStaff}){
+function ConfigPage({config,onSave,staff,onSaveStaff,onRecalculate}){
   const [rates,setRates]=useState(config.rates);
   const [defComm,setDefComm]=useState(String(config.defaultCommissionPct));
   const [schoolCut,setSchoolCut]=useState(String(config.schoolCutPct));
@@ -1806,6 +1828,7 @@ function ConfigPage({config,onSave,staff,onSaveStaff}){
             {(s.role==="seller"||s.role==="both")&&<Inp label="Comisión %" type="number" value={String(s.commissionPct)} onChange={v=>onSaveStaff({...s,commissionPct:+v})} small/>}
             {(s.role==="instructor"||s.role==="both")&&<Inp label="$/hora" type="number" value={String(s.hourlyRate)} onChange={v=>onSaveStaff({...s,hourlyRate:+v})} small/>}
           </div>
+          <Btn variant="ghost" size="sm" style={{marginTop:6}} onClick={async()=>{try{await onRecalculate(s.id);}catch(e){alert("Error: "+e.message);}}}>↺ Recalcular clases</Btn>
         </div>))}
       </Card>
     </div>
