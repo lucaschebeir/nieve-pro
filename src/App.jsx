@@ -868,10 +868,10 @@ function AdminApp() {
     const {from:xFrom,to:xTo}=seasonRange();
     const xClasses=classes.filter(c=>c.classDate>=xFrom&&c.classDate<=xTo);
     const xExpenses=expenses.filter(e=>e.date>=xFrom&&e.date<=xTo);
-    const xIngresosBrutos=xClasses.reduce((a,c)=>c.scenario==="own_class"&&c.schoolCut>0?a:a+c.paidAmount,0);
-    const xACobrar=xClasses.reduce((a,c)=>{if(c.scenario==="own_class"&&c.schoolCut>0)return a;return a+(c.amount-c.paidAmount);},0);
+    const xIngresosBrutos=xClasses.reduce((a,c)=>c.scenario==="own_class"?a:a+c.paidAmount,0);
+    const xACobrar=xClasses.reduce((a,c)=>{if(c.scenario==="own_class")return a;return a+(c.amount-c.paidAmount);},0);
     const xTotalFacturado=xClasses.reduce((a,c)=>a+c.amount,0);
-    const xTotalComisiones=xClasses.reduce((a,c)=>c.scenario==="own_class"&&c.schoolCut>0?a:a+(c.sellerCommission||0),0);
+    const xTotalComisiones=xClasses.reduce((a,c)=>c.scenario==="own_class"?a:a+(c.sellerCommission||0),0);
     const xHonorariosAPagar=xClasses.reduce((a,c)=>a+(c.instructorEarning||0),0);
     const xAportesStaff=xClasses.reduce((a,c)=>c.scenario==="own_class"&&c.schoolCut>0?a+c.schoolCut:a,0);
     const xTotalInstructores=xHonorariosAPagar-xAportesStaff;
@@ -1625,16 +1625,16 @@ function FinanzasPage({classes,expenses,staff,config,onAddExpense}){
     return a+hours*defaultHourlyRate;
   },0);
   const ingresosBrutos=filteredClasses.reduce((a,c)=>{
-    if(c.scenario==="own_class"&&c.schoolCut>0) return a; // staff own_class: excluido (va en aportes)
+    if(c.scenario==="own_class") return a; // excluido (staff aportes + clases dueños)
     return a+c.paidAmount;
   },0);
   const aCobrar=filteredClasses.reduce((a,c)=>{
-    if(c.scenario==="own_class"&&c.schoolCut>0) return a;
+    if(c.scenario==="own_class") return a;
     return a+(c.amount-c.paidAmount);
   },0);
   const ingresosProyectados=ingresosBrutos+aCobrar;
   const totalComisiones=filteredClasses.reduce((a,c)=>{
-    if(c.scenario==="own_class"&&c.schoolCut>0) return a; // staff own_class: excluido
+    if(c.scenario==="own_class") return a;
     return a+(c.sellerCommission||0);
   },0);
   const honorariosAPagar=filteredClasses.reduce((a,c)=>a+(c.instructorEarning||0),0)+estimatedInstrCost;
