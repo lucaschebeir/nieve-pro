@@ -773,20 +773,24 @@ function AdminApp() {
     setModal(null);
   }
   async function handleRecalculateClasses(staffId) {
+    // Fetch staff fresco de la DB para evitar timing stale con isOwner
+    const { data: freshStaff } = await supabase.from("staff").select("*");
+    const freshMap = Object.fromEntries((freshStaff || []).map(s => [s.id, s]));
     const toUpdate = enrichedClasses.filter(c => c.sellerId === staffId || c.instructorId === staffId);
     for (const c of toUpdate) {
       const scenario = calcScenario(c.sellerId, c.instructorId);
       const seller = staff.find(s => s.id === c.sellerId);
       const instructor = staff.find(s => s.id === c.instructorId);
-      const ownPerson = scenario === "own_class" ? (seller || instructor) : null;
-      const schoolCutPct = ownPerson?.isOwner ? 0 : (config.schoolCutPct || 0);
+      const ownId = scenario === "own_class" ? (c.sellerId || c.instructorId) : null;
+      const isOwner = ownId ? !!freshMap[ownId]?.is_owner : false;
+      const schoolCutPct = isOwner ? 0 : (config.schoolCutPct || 0);
       const hours = c.instructorHours || 0;
       const earnings = calcEarnings(c.amount, scenario, seller, instructor, schoolCutPct, hours);
       const { error } = await supabase.from("classes").update({
         scenario,
-        seller_commission:    earnings.sellerCommission,
-        instructor_earning:   earnings.instructorEarning,
-        school_cut:           earnings.schoolCut,
+        seller_commission:      earnings.sellerCommission,
+        instructor_earning:     earnings.instructorEarning,
+        school_cut:             earnings.schoolCut,
         instructor_hourly_rate: earnings.instructorHourlyRate || null,
       }).eq("id", c.id);
       if (error) throw error;
