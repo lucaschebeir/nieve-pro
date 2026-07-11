@@ -1060,7 +1060,7 @@ export function PlanningInstructorView({ classes, staffMember, staff = [], onCon
             ? <div style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"#22c55e",fontWeight:700}}>
                 ✓ Visto
               </div>
-            : <button onClick={()=>onConfirm(c.id)}
+            : <button onClick={async()=>{try{await onConfirm(c.id);}catch(e){alert("Error: "+e.message);}}}
                 style={{alignSelf:"flex-start",background:"#22c55e22",border:"1px solid #22c55e80",
                   color:"#22c55e",cursor:"pointer",fontSize:12,fontWeight:700,
                   padding:"6px 14px",borderRadius:8,fontFamily:"inherit"}}>

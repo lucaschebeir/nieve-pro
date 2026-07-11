@@ -270,8 +270,13 @@ export function useClasses() {
   }
 
   async function confirmClass(classId) {
-    const { error } = await supabase.from("classes").update({ confirmed_by_instructor: true }).eq("id", classId);
+    const { data, error } = await supabase
+      .from("classes")
+      .update({ confirmed_by_instructor: true })
+      .eq("id", classId)
+      .select("id");
     if (error) throw error;
+    if (!data || data.length === 0) throw new Error("Sin permiso RLS. Necesitás agregar una policy en Supabase para que el instructor pueda confirmar su clase.");
     refetch();
   }
 
