@@ -943,7 +943,7 @@ const PAY_INFO = {
   paid:     { label: "Pago Total",   color: T.green  },
 };
 
-export function PlanningInstructorView({ classes, staffMember, staff = [], onConfirm }) {
+export function PlanningInstructorView({ classes, staffMember, staff = [], onConfirm, clients = [] }) {
   const [anchorDate, setAnchorDate] = useState(todayStr());
   const [unavailByDate, setUnavailByDate] = useState(new Map());
   const [groupMatesMap, setGroupMatesMap] = useState({});
@@ -983,7 +983,7 @@ export function PlanningInstructorView({ classes, staffMember, staff = [], onCon
       });
   }, [staffMember?.id]);
 
-  function AgendaCard({ c }) {
+  function AgendaCard({ c, clients = [] }) {
     const color    = classColor(c);
     const startMin = timeToMin(c.horarioInicio);
     const endStr   = startMin != null ? fmtTime(minToTime(startMin + classDuration(c))) : null;
@@ -1033,6 +1033,9 @@ export function PlanningInstructorView({ classes, staffMember, staff = [], onCon
         </div>
         <div>
           <div style={{ fontWeight: 900, fontSize: 15 }}>{c.clientName}</div>
+          {(() => { const cl = clients.find(x => x.id === c.clientId); return cl?.phone ? (
+            <div style={{ fontSize: 12, color: T.textDim, marginTop: 2 }}>📞 {cl.phone}</div>
+          ) : null; })()}
           {c.peopleCount > 1 && (
             <div style={{ fontSize: 12, color: T.textDim, marginTop: 2 }}>👥 {c.peopleCount} personas</div>
           )}
@@ -1124,7 +1127,7 @@ export function PlanningInstructorView({ classes, staffMember, staff = [], onCon
 
         {/* Clases */}
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {dayClasses.map(c => <AgendaCard key={c.id} c={c} />)}
+          {dayClasses.map(c => <AgendaCard key={c.id} c={c} clients={clients} />)}
         </div>
       </div>
     );

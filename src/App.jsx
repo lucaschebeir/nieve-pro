@@ -2074,7 +2074,7 @@ function StaffPortalPage({ staffMember, staff, classes, settlements, clients, ba
 
         {/* Tab: Mi Agenda — solo visible para instructores, filtra por su propio id */}
         {tab === "agenda" && (
-          <PlanningInstructorView classes={classes} staffMember={staffMember} staff={staff} onConfirm={onConfirm} />
+          <PlanningInstructorView classes={classes} staffMember={staffMember} staff={staff} onConfirm={onConfirm} clients={clients} />
         )}
       </div>
     </div>
