@@ -1141,7 +1141,7 @@ function ClassesPage({classes,staff,clients,onEdit,onNew,onClientClick,onFinance
     return {groupMap:gm,ungrouped:ug};
   },[sorted]);
 
-  const totalM=filtered.reduce((a,c)=>c.scenario==="own_class"&&c.schoolCut>0?a+c.schoolCut:a+c.amount,0);
+  const totalM=filtered.reduce((a,c)=>c.scenario==="own_class"&&c.schoolCut>0?a:a+c.amount,0);
   const totalC=filtered.reduce((a,c)=>c.scenario==="own_class"&&c.schoolCut>0?a:a+c.paidAmount,0);
 
   function toggleSelect(id){setSelected(s=>{const n=new Set(s);n.has(id)?n.delete(id):n.add(id);return n;});}
@@ -1242,8 +1242,8 @@ function ClassesPage({classes,staff,clients,onEdit,onNew,onClientClick,onFinance
           <tbody>
             {Object.entries(groupMap).map(([gid,gclasses])=>{
               const expanded=expandedGroups.has(gid);
-              const gTotal=gclasses.reduce((a,c)=>a+c.amount,0);
-              const gPaid=gclasses.reduce((a,c)=>a+c.paidAmount,0);
+              const gTotal=gclasses.filter(c=>!(c.scenario==="own_class"&&c.schoolCut>0)).reduce((a,c)=>a+c.amount,0);
+              const gPaid=gclasses.filter(c=>!(c.scenario==="own_class"&&c.schoolCut>0)).reduce((a,c)=>a+c.paidAmount,0);
               const gSaldo=gTotal-gPaid;
               const worstStatus=gclasses.some(c=>c.paymentStatus==="reserved")?"reserved":gclasses.some(c=>c.paymentStatus==="partial")?"partial":"paid";
               const lb=worstStatus==="reserved"?T.gold:worstStatus==="partial"?T.orange:T.green;
