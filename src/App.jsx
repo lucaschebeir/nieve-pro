@@ -1168,14 +1168,15 @@ function ClassesPage({classes,staff,clients,onEdit,onNew,onClientClick,onFinance
     const seller=staff.find(s=>s.id===c.sellerId);
     const instr=staff.find(s=>s.id===c.instructorId);
     const staffE=(c.sellerCommission||0)+(c.instructorEarning||0);
-    const lb=c.paymentStatus==="reserved"?T.gold:c.paymentStatus==="partial"?T.orange:T.green;
+    const isNonOwnerOwn=c.scenario==="own_class"&&c.schoolCut>0;
+    const lb=isNonOwnerOwn?T.muted:c.paymentStatus==="reserved"?T.gold:c.paymentStatus==="partial"?T.orange:T.green;
     return(
       <tr style={{borderLeft:`3px solid ${lb}40`,background:indent?`${T.surface}80`:undefined}}>
         <TD style={{fontSize:12,color:T.textDim,whiteSpace:"nowrap",paddingLeft:indent?28:undefined}}>{fmtDate(c.classDate)}</TD>
         <TD><Badge text={c.classTypeName||"—"} color={T.muted} small/><Badge text={c.discipline==="snowboard"?"🏂 Snowboard":"🎿 Esquí"} color={c.discipline==="snowboard"?T.purple:T.cyan} small/></TD>
         <TD><button onClick={()=>onClientClick(c.clientId,c.clientName)} style={{background:"none",border:"none",color:T.accent,fontWeight:700,fontSize:13,cursor:"pointer",padding:0,fontFamily:"inherit",textDecoration:"underline"}}>{c.clientName}</button>{c.notes&&<div style={{fontSize:11,color:T.textDim,maxWidth:140,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.notes}</div>}</TD>
         <TD><div style={{fontFamily:"monospace",fontWeight:800}}>{fmt(c.amount)}</div><button onClick={()=>onFinanceClick(c)} style={{background:"none",border:"none",color:PAY_STATUS[c.paymentStatus]?.color,fontSize:11,cursor:"pointer",padding:0,fontFamily:"monospace",fontWeight:600,textDecoration:"underline"}}>{fmt(c.paidAmount)} ▸</button><PayBar amount={c.amount} paidAmount={c.paidAmount}/></TD>
-        <TD><PayBadge status={c.paymentStatus}/></TD>
+        <TD>{isNonOwnerOwn?<Badge text="Propia" color={T.muted} small/>:<PayBadge status={c.paymentStatus}/>}</TD>
         <TD style={{fontSize:12}}>{seller?<div style={{display:"flex",alignItems:"center",gap:6}}><Av name={seller.name} size={22} color={T.cyan}/>{seller.name}</div>:<span style={{color:T.muted}}>—</span>}</TD>
         <TD>{instr?<div><div style={{display:"flex",alignItems:"center",gap:6,fontSize:12}}><Av name={instr.name} size={22} color={T.purple}/>{instr.name}</div><InstrBadge status={c.instructorStatus}/></div>:<InstrBadge status="unassigned"/>}</TD>
         <TD style={{fontFamily:"monospace",color:T.accent,fontWeight:700}}>{fmt(staffE)}</TD>
@@ -1245,7 +1246,8 @@ function ClassesPage({classes,staff,clients,onEdit,onNew,onClientClick,onFinance
               const gTotal=gclasses.filter(c=>!(c.scenario==="own_class"&&c.schoolCut>0)).reduce((a,c)=>a+c.amount,0);
               const gPaid=gclasses.filter(c=>!(c.scenario==="own_class"&&c.schoolCut>0)).reduce((a,c)=>a+c.paidAmount,0);
               const gSaldo=gTotal-gPaid;
-              const worstStatus=gclasses.some(c=>c.paymentStatus==="reserved")?"reserved":gclasses.some(c=>c.paymentStatus==="partial")?"partial":"paid";
+              const billable=gclasses.filter(c=>!(c.scenario==="own_class"&&c.schoolCut>0));
+              const worstStatus=billable.some(c=>c.paymentStatus==="reserved")?"reserved":billable.some(c=>c.paymentStatus==="partial")?"partial":"paid";
               const lb=worstStatus==="reserved"?T.gold:worstStatus==="partial"?T.orange:T.green;
               const client=gclasses[0];
               return(
