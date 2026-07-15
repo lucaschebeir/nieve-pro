@@ -4,7 +4,7 @@
 
 import ResetPasswordScreen from "./components/ResetPasswordScreen";
 import PlanningView, { PlanningInstructorView } from "./components/PlanningView";
-import { useState, useMemo, useCallback, useEffect, Fragment } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef, Fragment } from "react";
 import * as XLSX from "xlsx";
 import { useAuth } from "./context/AuthContext";
 import LoginScreen from "./components/LoginScreen";
@@ -643,7 +643,7 @@ function ModalSettle({name,staffId,classes,onConfirm,onClose}){
   const [saving,setSaving]=useState(false);
   const [showDetail,setShowDetail]=useState(false);
   const toSettle=useMemo(()=>
-    (classes||[]).filter(c=>(c.classDone||c.classDate<today)&&!c.isSettled&&c.classDate>=start&&c.classDate<=end&&(c.instructorId===staffId||c.sellerId===staffId))
+    (classes||[]).filter(c=>c.classDone&&!c.isSettled&&c.classDate>=start&&c.classDate<=end&&(c.instructorId===staffId||c.sellerId===staffId))
       .sort((a,b)=>a.classDate.localeCompare(b.classDate))
   ,[classes,staffId,start,end]);
   const toSettleWithEarn=useMemo(()=>toSettle.map(c=>{
@@ -743,6 +743,21 @@ function AdminApp() {
     setToast({msg,type});
     setTimeout(()=>setToast(null),3000);
   }, []);
+
+  const autoMarkDoneRef = useRef(false);
+  useEffect(() => {
+    if (autoMarkDoneRef.current || !classes.length) return;
+    autoMarkDoneRef.current = true;
+    const hour = new Date().getHours();
+    const toMark = classes.filter(c =>
+      !c.classDone && (c.classDate < today || (c.classDate === today && hour >= 18))
+    );
+    if (!toMark.length) return;
+    (async () => {
+      await supabase.from("classes").update({ class_done: true }).in("id", toMark.map(c => c.id));
+      await refetchClasses();
+    })();
+  }, [classes]);
 
   const loading = false;
 
@@ -995,7 +1010,7 @@ function AdminApp() {
 // Solo cambia que reciben datos reales en lugar de mock
 
 function calcPendingPast(classes, staffId){
-  return classes.filter(c=>!c.isSettled&&(c.classDone||c.classDate<today)&&(c.instructorId===staffId||c.sellerId===staffId))
+  return classes.filter(c=>!c.isSettled&&c.classDone&&(c.instructorId===staffId||c.sellerId===staffId))
     .reduce((a,c)=>{
       const earn=(c.instructorId===staffId&&(c.scenario==="instructor_only"||c.scenario==="seller_and_instructor"))?c.instructorEarning:c.sellerCommission;
       return a+(earn||0);
@@ -1406,7 +1421,7 @@ function StaffPage({staff,getBalance,settlements,clients,classes,extraCommission
   if(viewStaff){
     const bal=getBalance(viewStaff.id);
     const myClasses=classes.filter(c=>c.sellerId===viewStaff.id||c.instructorId===viewStaff.id).sort((a,b)=>b.classDate?.localeCompare(a.classDate));
-    const pendingPast=myClasses.filter(c=>!c.isSettled&&(c.classDone||c.classDate<today)).reduce((a,c)=>{
+    const pendingPast=myClasses.filter(c=>!c.isSettled&&c.classDone).reduce((a,c)=>{
       const earn=(c.instructorId===viewStaff.id&&(c.scenario==="instructor_only"||c.scenario==="seller_and_instructor"))?c.instructorEarning:c.sellerCommission;
       return a+(earn||0);
     },0);
@@ -1862,7 +1877,7 @@ function StaffPortalPage({ staffMember, staff, classes, settlements, clients, ba
   const pendingClasses  = myClasses.filter(c => !c.isSettled);
   const settledClasses  = myClasses.filter(c => c.isSettled);
   const pendingPast     = calcPendingPast(classes, staffMember?.id);
-  const pendingPastCount= myClasses.filter(c => !c.isSettled && (c.classDone || c.classDate < today)).length;
+  const pendingPastCount= myClasses.filter(c => !c.isSettled && c.classDone).length;
 
   return (
     <div style={{ minHeight: "100vh", background: T.bg, color: T.text, fontFamily: "'DM Sans','Segoe UI',system-ui,sans-serif" }}>
@@ -1918,8 +1933,8 @@ function StaffPortalPage({ staffMember, staff, classes, settlements, clients, ba
 
         {/* Tab: Clases Pendientes */}
         {tab === "pending" && (()=>{
-          const dadas   = pendingClasses.filter(c => c.classDone || c.classDate < today);
-          const futuras = pendingClasses.filter(c => !c.classDone && c.classDate >= today);
+          const dadas   = pendingClasses.filter(c => c.classDone);
+          const futuras = pendingClasses.filter(c => !c.classDone);
           const cols    = ["Fecha","Cliente","Tipo",isSeller?"Monto":"Horas","Est. Pago","Mi Ganancia"];
           function PendingRow({c}){
             const isPureInstr = c.instructorId===staffMember?.id && c.sellerId!==staffMember?.id;
