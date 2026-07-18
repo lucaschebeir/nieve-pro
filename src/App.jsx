@@ -748,9 +748,11 @@ function AdminApp() {
   useEffect(() => {
     if (autoMarkDoneRef.current || !classes.length) return;
     autoMarkDoneRef.current = true;
-    const hour = new Date().getHours();
+    const now = new Date();
+    const hour = now.getHours();
+    const localToday = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
     const toMark = classes.filter(c =>
-      !c.classDone && (c.classDate < today || (c.classDate === today && hour >= 18))
+      !c.classDone && (c.classDate < localToday || (c.classDate === localToday && hour >= 18))
     );
     if (!toMark.length) return;
     (async () => {
