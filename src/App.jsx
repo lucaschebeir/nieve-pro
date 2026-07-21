@@ -1420,6 +1420,8 @@ function StaffPage({staff,getBalance,settlements,clients,classes,extraCommission
   const [viewId,setViewId]=useState(selectedStaffId||null);
   const [staffTab,setStaffTab]=useState("pending");
   const [selClient,setSelClient]=useState(null);
+  const [histFrom,setHistFrom]=useState("");
+  const [histTo,setHistTo]=useState("");
   const pendingMap=useMemo(()=>{const m={};staff.forEach(s=>{m[s.id]=calcPendingPast(classes,s.id);});return m;},[classes,staff]);
   const viewStaff=viewId?staff.find(s=>s.id===viewId):null;
   if(viewStaff){
@@ -1431,6 +1433,8 @@ function StaffPage({staff,getBalance,settlements,clients,classes,extraCommission
     },0);
     const mySettlements=settlements.filter(s=>s.staffId===viewStaff.id);
     const myClients=clients.filter(c=>c.sellerId===viewStaff.id);
+    const clasesPropias=myClasses.filter(c=>c.scenario==="own_class").length;
+    const clasesAsignadas=myClasses.length-clasesPropias;
     const isSeller=viewStaff.role==="seller"||viewStaff.role==="both";
     const tabs=[["pending","Pendientes"],["history","Historial"],["settlements","Liquidaciones"],...(isSeller?[["clients",`Cartera (${myClients.length})`]]:[])] ;
     return(
@@ -1456,10 +1460,11 @@ function StaffPage({staff,getBalance,settlements,clients,classes,extraCommission
             </div>
           </div>
           <div style={{display:"grid",gridTemplateColumns:`repeat(${isSeller?4:3},1fr)`,gap:10,marginBottom:16}}>
-            {[["A Pagar",fmt(pendingPast),T.gold],["Liquidado",fmt(mySettlements.reduce((a,s)=>a+s.totalEarned,0)),T.green],["Clases",myClasses.length,T.text],...(isSeller?[["Clientes",myClients.length,T.cyan]]:[])].map(([l,v,c])=>(
+            {[["A Pagar",fmt(pendingPast),T.gold,null],["Liquidado",fmt(mySettlements.reduce((a,s)=>a+s.totalEarned,0)),T.green,null],["Clases",myClasses.length,T.text,`${clasesPropias} prop. · ${clasesAsignadas} asig.`],...(isSeller?[["Clientes",myClients.length,T.cyan,null]]:[])].map(([l,v,c,s])=>(
               <div key={l} style={{background:T.surface,borderRadius:10,padding:"12px 14px",textAlign:"center"}}>
                 <div style={{fontSize:10,color:T.textDim,textTransform:"uppercase"}}>{l}</div>
                 <div style={{fontSize:20,fontWeight:900,color:c,fontFamily:"monospace",marginTop:4}}>{v}</div>
+                {s&&<div style={{fontSize:10,color:T.muted,marginTop:3}}>{s}</div>}
               </div>
             ))}
           </div>
@@ -1495,8 +1500,8 @@ function StaffPage({staff,getBalance,settlements,clients,classes,extraCommission
     {myClasses.filter(c=>!c.isSettled).length===0&&extraCommissions.filter(e=>e.staffId===viewStaff.id&&!e.isSettled).length===0&&<Empty text="Sin pendientes"/>}
   </div>
 )}
-            {staffTab==="history"&&(myClasses.filter(c=>c.isSettled).length===0?<Empty text="Sin historial"/>:myClasses.filter(c=>c.isSettled).map(c=>{const earn=c.instructorId===viewStaff.id&&c.scenario!=="own_class"?c.instructorEarning:c.sellerCommission;return(<div key={c.id} style={{background:T.surface,borderRadius:8,padding:"10px 14px",fontSize:12,display:"flex",gap:10,alignItems:"center",borderLeft:`3px solid ${T.muted}`}}><span style={{color:T.textDim}}>{fmtDate(c.classDate)}</span><span style={{flex:1,fontWeight:600}}>{c.clientName}</span><span style={{fontFamily:"monospace",color:T.green,fontWeight:700}}>{fmt(earn)}</span></div>);})) }
-            {staffTab==="settlements"&&(mySettlements.length===0?<Empty text="Sin liquidaciones"/>:mySettlements.map(s=>(<div key={s.id} style={{background:T.surface,borderRadius:8,padding:"10px 14px",fontSize:12,display:"flex",gap:10,alignItems:"center"}}><span style={{color:T.textDim,whiteSpace:"nowrap"}}>{fmtDate(s.settledAt)}</span><span style={{flex:1}}>{fmtDate(s.periodStart)} → {fmtDate(s.periodEnd)}</span><span style={{fontFamily:"monospace",color:T.green,fontWeight:700}}>{fmt(s.totalEarned)}</span><Badge text={s.method} color={T.accent} small/></div>)))}
+            {staffTab==="history"&&(()=>{const settled=myClasses.filter(c=>c.isSettled&&(!histFrom||c.classDate>=histFrom)&&(!histTo||c.classDate<=histTo));return(<div style={{display:"flex",flexDirection:"column",gap:8}}><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}><Inp label="Desde" type="date" value={histFrom} onChange={setHistFrom}/><Inp label="Hasta" type="date" value={histTo} onChange={setHistTo}/></div>{settled.length===0?<Empty text="Sin historial"/>:<div style={{display:"flex",flexDirection:"column",gap:5}}>{settled.map(c=>{const earn=(c.instructorId===viewStaff.id&&(c.scenario==="instructor_only"||c.scenario==="seller_and_instructor"))?c.instructorEarning:c.sellerCommission;return(<div key={c.id} style={{background:T.surface,borderRadius:8,padding:"10px 14px",fontSize:12,borderLeft:`3px solid ${T.muted}`}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}><span style={{color:T.textDim}}>{fmtDate(c.classDate)}</span><span style={{fontWeight:700,flex:1,paddingLeft:8}}>{c.clientName}</span><PayBadge status={c.paymentStatus}/><span style={{fontFamily:"monospace",color:T.green,fontWeight:700}}>→ {fmt(earn)}</span></div>{c.classTypeName&&<div style={{color:T.muted,fontSize:11,marginTop:3}}>{c.classTypeName}</div>}{c.notes&&<div style={{color:T.muted,fontSize:11,marginTop:2}}>{c.notes}</div>}</div>);})}</div>}</div>);})()}
+            {staffTab==="settlements"&&(mySettlements.length===0?<Empty text="Sin liquidaciones"/>:<div style={{display:"flex",flexDirection:"column",gap:5}}>{mySettlements.map(s=>(<div key={s.id} style={{background:T.surface,borderRadius:8,padding:"10px 14px",fontSize:12}}><div style={{display:"flex",gap:10,alignItems:"center"}}><span style={{color:T.textDim,whiteSpace:"nowrap"}}>{fmtDate(s.settledAt)}</span><span style={{flex:1}}>{fmtDate(s.periodStart)} → {fmtDate(s.periodEnd)}</span><span style={{fontFamily:"monospace",color:T.green,fontWeight:700}}>{fmt(s.totalEarned)}</span><Badge text={s.method} color={T.accent} small/></div>{s.notes&&<div style={{color:T.muted,fontSize:11,marginTop:4}}>{s.notes}</div>}</div>))}</div>)}
             {staffTab==="clients"&&!selClient&&(myClients.length===0?<Empty text="Sin clientes"/>:myClients.map(cl=>{const cls=classes.filter(c=>c.clientId===cl.id||c.clientName?.toLowerCase()===cl.name?.toLowerCase());return(<div key={cl.id} onClick={()=>setSelClient(cl)} style={{background:T.surface,borderRadius:8,padding:"10px 14px",cursor:"pointer",borderLeft:`3px solid ${T.cyan}`,display:"flex",gap:12,alignItems:"center"}} onMouseEnter={e=>e.currentTarget.style.background=T.cardHover} onMouseLeave={e=>e.currentTarget.style.background=T.surface}><Av name={cl.name} size={34} color={T.accent}/><div style={{flex:1}}><div style={{fontWeight:700}}>{cl.name}</div>{cl.phone&&<div style={{fontSize:11,color:T.textDim}}>📞 {cl.phone}</div>}</div><div style={{textAlign:"right"}}><div style={{fontFamily:"monospace",color:T.green,fontWeight:700}}>{fmt(cls.reduce((a,c)=>a+c.amount,0))}</div><div style={{fontSize:11,color:T.muted}}>{cls.length} clase(s)</div></div><span style={{color:T.textDim,fontSize:18}}>›</span></div>);})) }
             {staffTab==="clients"&&selClient&&<ClientDetailCard client={selClient} allClasses={classes.filter(c=>c.clientId===selClient.id||c.clientName?.toLowerCase()===selClient.name?.toLowerCase())} staff={staff} onBack={()=>setSelClient(null)} backLabel="← Cartera" isAdmin/>}
           </div>
@@ -1865,6 +1870,8 @@ function StaffPortalPage({ staffMember, staff, classes, settlements, clients, ba
     .sort((a, b) => b.classDate?.localeCompare(a.classDate));
   const mySettlements = settlements.filter(s => s.staffId === staffMember?.id);
   const myClients = clients.filter(c => c.sellerId === staffMember?.id);
+  const clasesPropias = myClasses.filter(c => c.scenario === "own_class").length;
+  const clasesAsignadas = myClasses.length - clasesPropias;
   const isSeller = staffMember?.role === "seller" || staffMember?.role === "both";
   const isInstructor = staffMember?.role === "instructor" || staffMember?.role === "both";
   const rc = ROLE_COLORS[staffMember?.role] || T.accent;
@@ -1877,6 +1884,8 @@ function StaffPortalPage({ staffMember, staff, classes, settlements, clients, ba
   ];
   const [tab, setTab] = useState("pending");
   const [selClient, setSelClient] = useState(null);
+  const [histFrom, setHistFrom] = useState("");
+  const [histTo, setHistTo] = useState("");
 
   const pendingClasses  = myClasses.filter(c => !c.isSettled);
   const settledClasses  = myClasses.filter(c => c.isSettled);
@@ -1908,7 +1917,7 @@ function StaffPortalPage({ staffMember, staff, classes, settlements, clients, ba
             <Stat label="Liquidado" value={fmt(mySettlements.reduce((a, s) => a + s.totalEarned, 0))} color={T.green} />
           </Card>
           <Card>
-            <Stat label="Mis Clases" value={myClasses.length} color={T.cyan} />
+            <Stat label="Mis Clases" value={myClasses.length} color={T.cyan} sub={`${clasesPropias} prop. · ${clasesAsignadas} asig.`}/>
           </Card>
           {isSeller && (
             <Card>
@@ -1986,34 +1995,37 @@ function StaffPortalPage({ staffMember, staff, classes, settlements, clients, ba
         })()}
 
         {/* Tab: Historial */}
-        {tab === "history" && (
-          <Card style={{ padding: 0, overflow: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr>
-                  {["Fecha", "Cliente", "Tipo", "Ganado"].map(h => <TH key={h}>{h}</TH>)}
-                </tr>
-              </thead>
-              <tbody>
-                {settledClasses.map(c => {
-                  const isPureInstr = c.instructorId === staffMember?.id && c.sellerId !== staffMember?.id;
-                  const earn = isPureInstr ? c.instructorEarning : c.sellerCommission;
-                  return (
-                    <tr key={c.id}>
-                      <TD style={{ fontSize: 12, color: T.textDim }}>{fmtDate(c.classDate)}</TD>
-                      <TD style={{ fontWeight: 700 }}>{c.clientName}</TD>
-                      <TD><Badge text={c.classTypeName || "—"} color={T.muted} small /></TD>
-                      <TD style={{ fontFamily: "monospace", color: T.green, fontWeight: 700 }}>{fmt(earn)}</TD>
-                    </tr>
-                  );
-                })}
-                {settledClasses.length === 0 && (
-                  <tr><td colSpan={4}><Empty text="Sin historial" /></td></tr>
-                )}
-              </tbody>
-            </table>
-          </Card>
-        )}
+        {tab === "history" && (()=>{
+          const filtered=settledClasses.filter(c=>(!histFrom||c.classDate>=histFrom)&&(!histTo||c.classDate<=histTo));
+          return(
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                <Inp label="Desde" type="date" value={histFrom} onChange={setHistFrom}/>
+                <Inp label="Hasta" type="date" value={histTo} onChange={setHistTo}/>
+              </div>
+              {filtered.length===0?<Empty text="Sin historial"/>:
+                <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                  {filtered.map(c=>{
+                    const isPureInstr=c.instructorId===staffMember?.id&&c.sellerId!==staffMember?.id;
+                    const earn=isPureInstr?c.instructorEarning:c.sellerCommission;
+                    return(
+                      <div key={c.id} style={{background:T.surface,borderRadius:8,padding:"10px 14px",fontSize:12,borderLeft:`3px solid ${T.muted}`}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+                          <span style={{color:T.textDim}}>{fmtDate(c.classDate)}</span>
+                          <span style={{fontWeight:700,flex:1,paddingLeft:8}}>{c.clientName}</span>
+                          <PayBadge status={c.paymentStatus}/>
+                          <span style={{fontFamily:"monospace",color:T.green,fontWeight:700}}>→ {fmt(earn)}</span>
+                        </div>
+                        {c.classTypeName&&<div style={{color:T.muted,fontSize:11,marginTop:3}}>{c.classTypeName}</div>}
+                        {c.notes&&<div style={{color:T.muted,fontSize:11,marginTop:2}}>{c.notes}</div>}
+                      </div>
+                    );
+                  })}
+                </div>
+              }
+            </div>
+          );
+        })()}
 
         {/* Tab: Liquidaciones */}
         {tab === "settlements" && (
@@ -2033,7 +2045,7 @@ function StaffPortalPage({ staffMember, staff, classes, settlements, clients, ba
                     <TD style={{ fontSize: 12, color: T.textDim }}>{fmtDate(s.periodStart)} – {fmtDate(s.periodEnd)}</TD>
                     <TD style={{ fontFamily: "monospace" }}>{s.totalClasses}</TD>
                     <TD style={{ fontFamily: "monospace", color: T.green, fontWeight: 800 }}>{fmt(s.totalEarned)}</TD>
-                    <TD style={{ fontSize: 12 }}>{s.method}</TD>
+                    <TD style={{ fontSize: 12 }}>{s.method}{s.notes&&<div style={{color:T.muted,fontSize:11,marginTop:2}}>{s.notes}</div>}</TD>
                   </tr>
                 ))}
               </tbody>

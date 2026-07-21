@@ -340,7 +340,7 @@ export function useSettlements() {
     periodEnd:   s.period_end,
     totalClasses:s.total_classes,
     totalEarned: s.total_earned,
-    method:      s.payment_method,
+    method:      s.method,
     notes:       s.notes,
     settledAt:   s.settled_at?.split("T")[0],
   }));
