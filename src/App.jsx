@@ -643,7 +643,7 @@ function ModalSettle({name,staffId,classes,onConfirm,onClose}){
   const [saving,setSaving]=useState(false);
   const [showDetail,setShowDetail]=useState(false);
   const toSettle=useMemo(()=>
-    (classes||[]).filter(c=>c.classDone&&!c.isSettled&&c.classDate>=start&&c.classDate<=end&&(c.instructorId===staffId||c.sellerId===staffId))
+    (classes||[]).filter(c=>c.classDone&&isPendingFor(c,staffId)&&c.classDate>=start&&c.classDate<=end)
       .sort((a,b)=>a.classDate.localeCompare(b.classDate))
   ,[classes,staffId,start,end]);
   const toSettleWithEarn=useMemo(()=>toSettle.map(c=>{
@@ -694,6 +694,12 @@ function ModalSettle({name,staffId,classes,onConfirm,onClose}){
       </div>
     </Modal>
   );
+}
+
+function isPendingFor(c, staffId) {
+  if (c.sellerId === staffId && !c.sellerSettled) return true;
+  if (c.instructorId === staffId && !c.instructorSettled) return true;
+  return false;
 }
 
 // Helpers para preview de comisiones
@@ -817,6 +823,7 @@ function AdminApp() {
   }
   async function handleSettle(staffId, start, end, method, notes) {
     await settlePeriod(staffId, start, end, method, notes);
+    await refetchClasses();
     await refetchBalances();
     const s = staff.find(x => x.id === staffId);
     showToast(`✓ ${fmt(getBalance(staffId).pendingAmount)} liquidados para ${s?.name}`);
@@ -859,7 +866,7 @@ function AdminApp() {
       const misClases2 = classes.filter(c=>c.sellerId===s2.id||c.instructorId===s2.id);
       const misClientes2 = clients.filter(c=>c.sellerId===s2.id);
       const misLiquidaciones2 = settlements.filter(st=>st.staffId===s2.id);
-      const aPagar = misClases2.filter(c=>!c.isSettled).reduce((a,c)=>{
+      const aPagar = misClases2.filter(c=>isPendingFor(c,s2.id)).reduce((a,c)=>{
         const isPureInstr = c.instructorId===s2.id && c.sellerId!==s2.id;
         return a + (isPureInstr ? c.instructorEarning : c.sellerCommission);
       },0);
@@ -1012,7 +1019,7 @@ function AdminApp() {
 // Solo cambia que reciben datos reales en lugar de mock
 
 function calcPendingPast(classes, staffId){
-  return classes.filter(c=>!c.isSettled&&c.classDone&&(c.instructorId===staffId||c.sellerId===staffId))
+  return classes.filter(c=>c.classDone&&isPendingFor(c,staffId))
     .reduce((a,c)=>{
       const earn=(c.instructorId===staffId&&(c.scenario==="instructor_only"||c.scenario==="seller_and_instructor"))?c.instructorEarning:c.sellerCommission;
       return a+(earn||0);
@@ -1427,7 +1434,7 @@ function StaffPage({staff,getBalance,settlements,clients,classes,extraCommission
   if(viewStaff){
     const bal=getBalance(viewStaff.id);
     const myClasses=classes.filter(c=>c.sellerId===viewStaff.id||c.instructorId===viewStaff.id).sort((a,b)=>b.classDate?.localeCompare(a.classDate));
-    const pendingPast=myClasses.filter(c=>!c.isSettled&&c.classDone).reduce((a,c)=>{
+    const pendingPast=myClasses.filter(c=>c.classDone&&isPendingFor(c,viewStaff.id)).reduce((a,c)=>{
       const earn=(c.instructorId===viewStaff.id&&(c.scenario==="instructor_only"||c.scenario==="seller_and_instructor"))?c.instructorEarning:c.sellerCommission;
       return a+(earn||0);
     },0);
@@ -1474,7 +1481,7 @@ function StaffPage({staff,getBalance,settlements,clients,classes,extraCommission
           <div style={{maxHeight:380,overflowY:"auto",display:"flex",flexDirection:"column",gap:5}}>
             {staffTab==="pending"&&(
   <div style={{display:"flex",flexDirection:"column",gap:5}}>
-    {myClasses.filter(c=>!c.isSettled).map(c=>{
+    {myClasses.filter(c=>isPendingFor(c,viewStaff.id)).map(c=>{
       const earn=(c.instructorId===viewStaff.id&&(c.scenario==="instructor_only"||c.scenario==="seller_and_instructor"))?c.instructorEarning:c.sellerCommission;
       return(<div key={c.id} style={{background:T.surface,borderRadius:8,padding:"10px 14px",fontSize:12,borderLeft:`3px solid ${PAY_STATUS[c.paymentStatus]?.color||T.border}`}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
@@ -1497,10 +1504,10 @@ function StaffPage({staff,getBalance,settlements,clients,classes,extraCommission
         </div>
       </div>
     ))}
-    {myClasses.filter(c=>!c.isSettled).length===0&&extraCommissions.filter(e=>e.staffId===viewStaff.id&&!e.isSettled).length===0&&<Empty text="Sin pendientes"/>}
+    {myClasses.filter(c=>isPendingFor(c,viewStaff.id)).length===0&&extraCommissions.filter(e=>e.staffId===viewStaff.id&&!e.isSettled).length===0&&<Empty text="Sin pendientes"/>}
   </div>
 )}
-            {staffTab==="history"&&(()=>{const settled=myClasses.filter(c=>c.isSettled&&(!histFrom||c.classDate>=histFrom)&&(!histTo||c.classDate<=histTo));return(<div style={{display:"flex",flexDirection:"column",gap:8}}><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}><Inp label="Desde" type="date" value={histFrom} onChange={setHistFrom}/><Inp label="Hasta" type="date" value={histTo} onChange={setHistTo}/></div>{settled.length===0?<Empty text="Sin historial"/>:<div style={{display:"flex",flexDirection:"column",gap:5}}>{settled.map(c=>{const earn=(c.instructorId===viewStaff.id&&(c.scenario==="instructor_only"||c.scenario==="seller_and_instructor"))?c.instructorEarning:c.sellerCommission;return(<div key={c.id} style={{background:T.surface,borderRadius:8,padding:"10px 14px",fontSize:12,borderLeft:`3px solid ${T.muted}`}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}><span style={{color:T.textDim}}>{fmtDate(c.classDate)}</span><span style={{fontWeight:700,flex:1,paddingLeft:8}}>{c.clientName}</span><PayBadge status={c.paymentStatus}/><span style={{fontFamily:"monospace",color:T.green,fontWeight:700}}>→ {fmt(earn)}</span></div>{c.classTypeName&&<div style={{color:T.muted,fontSize:11,marginTop:3}}>{c.classTypeName}</div>}{c.notes&&<div style={{color:T.muted,fontSize:11,marginTop:2}}>{c.notes}</div>}</div>);})}</div>}</div>);})()}
+            {staffTab==="history"&&(()=>{const settled=myClasses.filter(c=>!isPendingFor(c,viewStaff.id)&&(!histFrom||c.classDate>=histFrom)&&(!histTo||c.classDate<=histTo));return(<div style={{display:"flex",flexDirection:"column",gap:8}}><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}><Inp label="Desde" type="date" value={histFrom} onChange={setHistFrom}/><Inp label="Hasta" type="date" value={histTo} onChange={setHistTo}/></div>{settled.length===0?<Empty text="Sin historial"/>:<div style={{display:"flex",flexDirection:"column",gap:5}}>{settled.map(c=>{const earn=(c.instructorId===viewStaff.id&&(c.scenario==="instructor_only"||c.scenario==="seller_and_instructor"))?c.instructorEarning:c.sellerCommission;return(<div key={c.id} style={{background:T.surface,borderRadius:8,padding:"10px 14px",fontSize:12,borderLeft:`3px solid ${T.muted}`}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}><span style={{color:T.textDim}}>{fmtDate(c.classDate)}</span><span style={{fontWeight:700,flex:1,paddingLeft:8}}>{c.clientName}</span><PayBadge status={c.paymentStatus}/><span style={{fontFamily:"monospace",color:T.green,fontWeight:700}}>→ {fmt(earn)}</span></div>{c.classTypeName&&<div style={{color:T.muted,fontSize:11,marginTop:3}}>{c.classTypeName}</div>}{c.notes&&<div style={{color:T.muted,fontSize:11,marginTop:2}}>{c.notes}</div>}</div>);})}</div>}</div>);})()}
             {staffTab==="settlements"&&(mySettlements.length===0?<Empty text="Sin liquidaciones"/>:<div style={{display:"flex",flexDirection:"column",gap:5}}>{mySettlements.map(s=>(<div key={s.id} style={{background:T.surface,borderRadius:8,padding:"10px 14px",fontSize:12}}><div style={{display:"flex",gap:10,alignItems:"center"}}><span style={{color:T.textDim,whiteSpace:"nowrap"}}>{fmtDate(s.settledAt)}</span><span style={{flex:1}}>{fmtDate(s.periodStart)} → {fmtDate(s.periodEnd)}</span><span style={{fontFamily:"monospace",color:T.green,fontWeight:700}}>{fmt(s.totalEarned)}</span><Badge text={s.method} color={T.accent} small/></div>{s.notes&&<div style={{color:T.muted,fontSize:11,marginTop:4}}>{s.notes}</div>}</div>))}</div>)}
             {staffTab==="clients"&&!selClient&&(myClients.length===0?<Empty text="Sin clientes"/>:myClients.map(cl=>{const cls=classes.filter(c=>c.clientId===cl.id||c.clientName?.toLowerCase()===cl.name?.toLowerCase());return(<div key={cl.id} onClick={()=>setSelClient(cl)} style={{background:T.surface,borderRadius:8,padding:"10px 14px",cursor:"pointer",borderLeft:`3px solid ${T.cyan}`,display:"flex",gap:12,alignItems:"center"}} onMouseEnter={e=>e.currentTarget.style.background=T.cardHover} onMouseLeave={e=>e.currentTarget.style.background=T.surface}><Av name={cl.name} size={34} color={T.accent}/><div style={{flex:1}}><div style={{fontWeight:700}}>{cl.name}</div>{cl.phone&&<div style={{fontSize:11,color:T.textDim}}>📞 {cl.phone}</div>}</div><div style={{textAlign:"right"}}><div style={{fontFamily:"monospace",color:T.green,fontWeight:700}}>{fmt(cls.reduce((a,c)=>a+c.amount,0))}</div><div style={{fontSize:11,color:T.muted}}>{cls.length} clase(s)</div></div><span style={{color:T.textDim,fontSize:18}}>›</span></div>);})) }
             {staffTab==="clients"&&selClient&&<ClientDetailCard client={selClient} allClasses={classes.filter(c=>c.clientId===selClient.id||c.clientName?.toLowerCase()===selClient.name?.toLowerCase())} staff={staff} onBack={()=>setSelClient(null)} backLabel="← Cartera" isAdmin/>}
@@ -1887,10 +1894,10 @@ function StaffPortalPage({ staffMember, staff, classes, settlements, clients, ba
   const [histFrom, setHistFrom] = useState("");
   const [histTo, setHistTo] = useState("");
 
-  const pendingClasses  = myClasses.filter(c => !c.isSettled);
-  const settledClasses  = myClasses.filter(c => c.isSettled);
+  const pendingClasses  = myClasses.filter(c => isPendingFor(c, staffMember?.id));
+  const settledClasses  = myClasses.filter(c => !isPendingFor(c, staffMember?.id));
   const pendingPast     = calcPendingPast(classes, staffMember?.id);
-  const pendingPastCount= myClasses.filter(c => !c.isSettled && c.classDone).length;
+  const pendingPastCount= myClasses.filter(c => c.classDone && isPendingFor(c, staffMember?.id)).length;
 
   return (
     <div style={{ minHeight: "100vh", background: T.bg, color: T.text, fontFamily: "'DM Sans','Segoe UI',system-ui,sans-serif" }}>

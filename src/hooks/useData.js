@@ -253,6 +253,8 @@ export function useClasses() {
     sellerCommission:    c.seller_commission,
     schoolCut:           c.school_cut,
     isSettled:           c.is_settled,
+    sellerSettled:       c.seller_settled,
+    instructorSettled:   c.instructor_settled,
     settlementId:        c.settlement_id,
     horarioInicio:       c.horario_inicio ? c.horario_inicio.slice(0, 5) : null,
     createdAt:              c.created_at?.split("T")[0],
@@ -262,7 +264,7 @@ export function useClasses() {
 
   async function updateClassSchedule(classId, { instructorId, horarioInicio }) {
     const patch = {};
-    if (instructorId !== undefined) { patch.instructor_id = instructorId || null; patch.confirmed_by_instructor = false; }
+    if (instructorId !== undefined) { patch.instructor_id = instructorId || null; patch.confirmed_by_instructor = false; patch.instructor_settled = false; patch.is_settled = false; }
     if (horarioInicio !== undefined) patch.horario_inicio = horarioInicio || null;
     const { error } = await supabase.from("classes").update(patch).eq("id", classId);
     if (error) throw error;
