@@ -1892,8 +1892,10 @@ function StaffPortalPage({ staffMember, staff, classes, settlements, clients, ba
     .sort((a, b) => b.classDate?.localeCompare(a.classDate));
   const mySettlements = settlements.filter(s => s.staffId === staffMember?.id);
   const myClients = clients.filter(c => c.sellerId === staffMember?.id);
-  const clasesPropias = myClasses.filter(c => c.scenario === "own_class").length;
-  const clasesAsignadas = myClasses.length - clasesPropias;
+  const seasonStart = `${new Date().getFullYear()}-06-01`;
+  const thisSeasonClasses = myClasses.filter(c => c.classDate >= seasonStart);
+  const clasesPropias = thisSeasonClasses.filter(c => c.scenario === "own_class").length;
+  const clasesAsignadas = thisSeasonClasses.length - clasesPropias;
   const isSeller = staffMember?.role === "seller" || staffMember?.role === "both";
   const isInstructor = staffMember?.role === "instructor" || staffMember?.role === "both";
   const rc = ROLE_COLORS[staffMember?.role] || T.accent;
@@ -1939,7 +1941,7 @@ function StaffPortalPage({ staffMember, staff, classes, settlements, clients, ba
             <Stat label="Liquidado" value={fmt(mySettlements.reduce((a, s) => a + s.totalEarned, 0))} color={T.green} />
           </Card>
           <Card>
-            <Stat label="Mis Clases" value={myClasses.length} color={T.cyan} sub={`${clasesPropias} prop. · ${clasesAsignadas} asig.`}/>
+            <Stat label="Mis Clases" value={thisSeasonClasses.length} color={T.cyan} sub={`${clasesPropias} prop. · ${clasesAsignadas} asig.`}/>
           </Card>
           {isSeller && (
             <Card>
