@@ -635,7 +635,7 @@ function ModalStaffEdit({data,config,onSave,onClose}){
 }
 
 // ─── MODAL: LIQUIDAR ──────────────────────────────────────────────────────────
-function ModalSettle({name,staffId,classes,onConfirm,onClose}){
+function ModalSettle({name,staffId,classes,extraCommissions,onConfirm,onClose}){
   const [start,setStart]=useState(daysAgo(15));
   const [end,setEnd]=useState(today);
   const [method,setMethod]=useState("Transferencia");
@@ -650,7 +650,12 @@ function ModalSettle({name,staffId,classes,onConfirm,onClose}){
     const earn=(c.instructorId===staffId&&(c.scenario==="instructor_only"||c.scenario==="seller_and_instructor"))?c.instructorEarning:c.sellerCommission;
     return {...c,earn:earn||0};
   }),[toSettle,staffId]);
-  const settleAmount=toSettleWithEarn.reduce((a,c)=>a+c.earn,0);
+  const extrasToSettle=useMemo(()=>
+    (extraCommissions||[]).filter(e=>e.staffId===staffId&&!e.isSettled&&e.date>=start&&e.date<=end)
+      .sort((a,b)=>a.date.localeCompare(b.date))
+  ,[extraCommissions,staffId,start,end]);
+  const settleAmount=toSettleWithEarn.reduce((a,c)=>a+c.earn,0)+extrasToSettle.reduce((a,e)=>a+e.amount,0);
+  const totalItems=toSettle.length+extrasToSettle.length;
   async function submit(){
     setSaving(true);
     try{ await onConfirm(staffId,start,end,method,notes); }
@@ -663,19 +668,28 @@ function ModalSettle({name,staffId,classes,onConfirm,onClose}){
         <div style={{fontSize:10,color:T.textDim,textTransform:"uppercase"}}>Total a liquidar</div>
         <div style={{fontSize:32,fontWeight:900,color:T.gold,fontFamily:"monospace"}}>{fmt(settleAmount)}</div>
         <button onClick={()=>setShowDetail(p=>!p)} style={{background:"none",border:"none",color:T.accent,fontSize:12,cursor:"pointer",marginTop:4,fontFamily:"inherit"}}>
-          {toSettle.length} clase(s) {showDetail?"▲ ocultar":"▼ ver desglose"}
+          {toSettle.length} clase(s){extrasToSettle.length>0?` · ${extrasToSettle.length} comisión(es)`:""} {showDetail?"▲ ocultar":"▼ ver desglose"}
         </button>
       </div>
       {showDetail&&(
         <div style={{maxHeight:220,overflowY:"auto",marginBottom:14,border:`1px solid ${T.border}`,borderRadius:8,fontSize:11}}>
-          {toSettleWithEarn.length===0&&<div style={{padding:12,color:T.muted,textAlign:"center"}}>Sin clases en este período</div>}
+          {totalItems===0&&<div style={{padding:12,color:T.muted,textAlign:"center"}}>Sin items en este período</div>}
           {toSettleWithEarn.map((c,i)=>(
-            <div key={c.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 12px",borderBottom:i<toSettleWithEarn.length-1?`1px solid ${T.border}`:"none",background:i%2===0?T.surface:"none"}}>
+            <div key={c.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 12px",borderBottom:(i<totalItems-1)?`1px solid ${T.border}`:"none",background:i%2===0?T.surface:"none"}}>
               <div style={{display:"flex",flexDirection:"column",gap:1}}>
                 <span style={{color:T.text,fontWeight:600}}>{c.clientName}</span>
                 <span style={{color:T.textDim}}>{fmtDate(c.classDate)} · {c.classTypeName}</span>
               </div>
               <span style={{fontFamily:"monospace",color:T.gold,fontWeight:700}}>{fmt(c.earn)}</span>
+            </div>
+          ))}
+          {extrasToSettle.map((e,i)=>(
+            <div key={e.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 12px",borderBottom:(toSettle.length+i<totalItems-1)?`1px solid ${T.border}`:"none",background:(toSettle.length+i)%2===0?T.surface:"none"}}>
+              <div style={{display:"flex",flexDirection:"column",gap:1}}>
+                <span style={{color:T.text,fontWeight:600}}>{e.description||"Comisión extra"}</span>
+                <span style={{color:T.textDim}}>{fmtDate(e.date)} · Comisión</span>
+              </div>
+              <span style={{fontFamily:"monospace",color:T.gold,fontWeight:700}}>{fmt(e.amount)}</span>
             </div>
           ))}
         </div>
@@ -689,7 +703,7 @@ function ModalSettle({name,staffId,classes,onConfirm,onClose}){
         <Inp label="Notas" value={notes} onChange={setNotes} textarea/>
       </div>
       <div style={{display:"flex",gap:10,marginTop:18}}>
-        <Btn variant="gold" full disabled={saving||toSettle.length===0} onClick={submit}>{saving?"Procesando...":"✓ Confirmar Liquidación"}</Btn>
+        <Btn variant="gold" full disabled={saving||totalItems===0} onClick={submit}>{saving?"Procesando...":"✓ Confirmar Liquidación"}</Btn>
         <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
       </div>
     </Modal>
@@ -824,6 +838,7 @@ function AdminApp() {
   async function handleSettle(staffId, start, end, method, notes) {
     await settlePeriod(staffId, start, end, method, notes);
     await refetchClasses();
+    await refetchExtra();
     await refetchBalances();
     const s = staff.find(x => x.id === staffId);
     showToast(`✓ ${fmt(getBalance(staffId).pendingAmount)} liquidados para ${s?.name}`);
@@ -1005,7 +1020,7 @@ function AdminApp() {
       {/* MODALS */}
       {modal?.type==="class_edit"   &&<ModalClassEdit data={modal.data} staff={staff} clients={clients} classes={enrichedClasses} config={config} onSave={handleSaveClass} onClose={()=>setModal(null)}/>}
       {modal?.type==="class_finance"&&<ClassFinanceModal cls={modal.data} staff={staff} onClose={()=>setModal(null)}/>}
-      {modal?.type==="settle"       &&<ModalSettle name={modal.data.name} staffId={modal.data.staffId} classes={enrichedClasses} onConfirm={handleSettle} onClose={()=>setModal(null)}/>}
+      {modal?.type==="settle"       &&<ModalSettle name={modal.data.name} staffId={modal.data.staffId} classes={enrichedClasses} extraCommissions={extraCommissions} onConfirm={handleSettle} onClose={()=>setModal(null)}/>}
       {modal?.type==="client_edit"  &&<ModalClientEdit data={modal.data} staff={staff} clients={clients} onSave={handleSaveClient} onClose={()=>setModal(null)}/>}
       {modal?.type==="staff_edit"   &&<ModalStaffEdit data={modal.data} config={config} onSave={handleSaveStaff} onClose={()=>setModal(null)}/>}
 {modal?.type==="extra_commission"&&<ModalExtraCommission staff={modal.data} onSave={async(amount,desc,date)=>{await addExtraCommission(modal.data.id,amount,desc,date);showToast("✓ Comisión registrada");setModal(null);}} onClose={()=>setModal(null)}/>}
