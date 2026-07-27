@@ -739,7 +739,7 @@ function AdminApp() {
   const { clients, loading: cL, saveClient } = useClients();
   const { classes, loading: clL, saveClass, deleteClass, updateClassSchedule, confirmClass, groupClasses, ungroupClasses, registerGroupPayment, refetch: refetchClasses } = useClasses();
   const { settlements, loading: stL, settlePeriod } = useSettlements();
-  const { expenses, loading: eL, addExpense } = useExpenses();
+  const { expenses, loading: eL, addExpense, confirmExpense } = useExpenses();
   const { extraCommissions, addExtraCommission, settleExtraCommissions, deleteExtraCommission, refetch: refetchExtra } = useExtraCommissions();
   const { config, saveConfig } = useConfig();
   const { getBalance, refetch: refetchBalances } = usePendingBalances();
@@ -1012,7 +1012,7 @@ function AdminApp() {
         {page==="classes"  &&<ClassesPage classes={enrichedClasses} staff={staff} clients={clients} onEdit={isViewer?undefined:c=>setModal({type:"class_edit",data:c})} onNew={isViewer?undefined:()=>setModal({type:"class_edit",data:null})} onClientClick={goToClient} onFinanceClick={c=>setModal({type:"class_finance",data:c})} onDelete={isViewer?undefined:async(id)=>{await deleteClass(id);showToast("✓ Clase eliminada")}} onGroupClasses={isViewer?undefined:groupClasses} onUngroupClasses={isViewer?undefined:ungroupClasses} onGroupPayment={isViewer?undefined:registerGroupPayment}/>}
         {page==="clients"  &&<ClientsPage clients={clients} staff={staff} classes={enrichedClasses} selectedClientId={selectedClientId} onClearSelected={()=>setSelectedClientId(null)} onEdit={isViewer?undefined:c=>setModal({type:"client_edit",data:c})} onNew={isViewer?undefined:()=>setModal({type:"client_edit",data:null})}/>}
         {page==="staff"    &&<StaffPage staff={staff} getBalance={getBalance} settlements={settlements} clients={clients} classes={enrichedClasses} selectedStaffId={selectedStaffId} onClearSelected={()=>setSelectedStaffId(null)} onToggle={isViewer?undefined:handleToggle} onEdit={isViewer?undefined:s=>setModal({type:"staff_edit",data:s})} onNew={isViewer?undefined:()=>setModal({type:"staff_edit",data:null})} onSettle={isViewer?undefined:s=>setModal({type:"settle",data:{staffId:s.id,name:s.name}})} extraCommissions={extraCommissions} onAddExtra={isViewer?undefined:s=>setModal({type:"extra_commission",data:s})} onDeleteExtra={isViewer?undefined:async(id)=>{await deleteExtraCommission(id);showToast("✓ Comisión eliminada");}}/>}
-        {page==="finanzas" &&<FinanzasPage classes={enrichedClasses} expenses={expenses} staff={staff} config={config} onAddExpense={isViewer?undefined:addExpense}/>}
+        {page==="finanzas" &&<FinanzasPage classes={enrichedClasses} expenses={expenses} staff={staff} config={config} onAddExpense={isViewer?undefined:addExpense} onConfirmExpense={isViewer?undefined:confirmExpense}/>}
         {page==="stats"    &&<EstadisticasPage classes={enrichedClasses} staff={staff} clients={clients} config={config}/>}
         {page==="search"   &&<SearchPage clients={clients} classes={enrichedClasses} staff={staff} onViewClient={c=>{setSelectedClientId(c.id);setPage("clients");}}/>}
         {page==="config"   &&<ConfigPage config={config} onSave={async (c)=>{await saveConfig(c);showToast("✓ Configuración guardada");}} staff={staff} onSaveStaff={handleSaveStaff} onRecalculate={handleRecalculateClasses}/>}
@@ -1562,15 +1562,16 @@ function StaffPage({staff,getBalance,settlements,clients,classes,extraCommission
   );
 }
 
-function DesgloseNeto({ingresosBrutos,aCobrar,totalComisiones,honorariosAPagar,aportesStaff,totalInstructores,totalGastos,netosFinal,netoProyectado,filteredClasses,staff,estimatedInstrCost,unassignedClasses,defaultHourlyRate}){
+function DesgloseNeto({ingresosBrutos,aCobrar,aCobrarPasado,aCobrarFuturo,totalComisiones,honorariosAPagar,aportesStaff,totalInstructores,totalGastos,totalGastosPrevistos,netosFinal,netoProyectado,filteredClasses,staff,estimatedInstrCost,unassignedClasses,defaultHourlyRate}){
   const [expanded,setExpanded]=useState(null);
   const toggle=k=>setExpanded(p=>p===k?null:k);
+  const [expandedVendedorPasado,setExpandedVendedorPasado]=useState(null);
 
   const byVendedor=useMemo(()=>{
     const m={};
     filteredClasses.forEach(c=>{
       if(!c.sellerCommission) return;
-      if(c.scenario==="own_class"&&c.schoolCut>0) return; // staff own_class: excluido
+      if(c.scenario==="own_class") return;
       const k=c.sellerId||"__escuela__";
       if(!m[k]){const s=staff.find(x=>x.id===k);m[k]={name:s?.name||"Escuela",amount:0,clases:0};}
       m[k].amount+=c.sellerCommission; m[k].clases++;
@@ -1606,10 +1607,24 @@ function DesgloseNeto({ingresosBrutos,aCobrar,totalComisiones,honorariosAPagar,a
     return Object.values(m).sort((a,b)=>b.amount-a.amount);
   },[filteredClasses,staff]);
 
-  const byVendedorACobrar=useMemo(()=>{
+  const byVendedorACobrarPasado=useMemo(()=>{
     const m={};
     filteredClasses.forEach(c=>{
-      if(c.scenario==="own_class"&&c.schoolCut>0) return;
+      if(c.scenario==="own_class"||!c.classDone) return;
+      const pending=c.amount-c.paidAmount;
+      if(pending<=0) return;
+      const k=c.sellerId||"__escuela__";
+      if(!m[k]){const s=staff.find(x=>x.id===k);m[k]={name:s?.name||"Escuela",amount:0,clases:0,items:[]};}
+      m[k].amount+=pending; m[k].clases++;
+      m[k].items.push(c);
+    });
+    return Object.values(m).sort((a,b)=>b.amount-a.amount);
+  },[filteredClasses,staff]);
+
+  const byVendedorACobrarFuturo=useMemo(()=>{
+    const m={};
+    filteredClasses.forEach(c=>{
+      if(c.scenario==="own_class"||c.classDone) return;
       const pending=c.amount-c.paidAmount;
       if(pending<=0) return;
       const k=c.sellerId||"__escuela__";
@@ -1625,6 +1640,7 @@ function DesgloseNeto({ingresosBrutos,aCobrar,totalComisiones,honorariosAPagar,a
     {key:"comisiones",label:"Comisiones vendedores",          value:totalComisiones, color:T.cyan,   sign:"−", expandable:true},
     {key:"honorarios",label:"Honorarios instructores (neto)",value:totalInstructores,color:T.purple, sign:"−", expandable:true},
     {key:"gastos",    label:"Gastos operativos",              value:totalGastos,     color:T.orange, sign:"−"},
+    ...(totalGastosPrevistos>0?[{key:"gastos_prev",label:"Gastos previstos",value:totalGastosPrevistos,color:T.orange,sign:"−"}]:[]),
     {key:"neto",      label:"── NETO FINAL (cobrado)",        value:netosFinal,      color:T.gold,   sign:"=", highlight:true},
     {key:"proyectado",label:"── NETO PROYECTADO",             value:netoProyectado,  color:T.teal,   sign:"=", highlight:true},
   ];
@@ -1647,24 +1663,71 @@ function DesgloseNeto({ingresosBrutos,aCobrar,totalComisiones,honorariosAPagar,a
             </div>
             {r.expandable&&expanded===r.key&&(
               <div style={{margin:"2px 0 4px",padding:"8px 12px",background:T.surface,border:`1px solid ${T.border}`,borderRadius:7,fontSize:11}}>
-                {(r.key==="comisiones"?byVendedor:r.key==="acobrar"?byVendedorACobrar:byInstructor).map((d,i)=>{
-                  const list=r.key==="comisiones"?byVendedor:r.key==="acobrar"?byVendedorACobrar:byInstructor;
-                  return(
-                  <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:i<list.length-1?`1px solid ${T.border}`:"none"}}>
-                    <span style={{color:d.estimated?T.orange:T.textDim}}>{d.name}{d.estimated?" ⚠":""}  <span style={{color:T.muted}}>({d.clases} clase{d.clases!==1?"s":""})</span></span>
-                    <span style={{fontFamily:"monospace",color:d.estimated?T.orange:r.color,fontWeight:600}}>{fmt(d.amount)}</span>
-                  </div>
-                );})}
-                {(r.key==="comisiones"?byVendedor:r.key==="acobrar"?byVendedorACobrar:byInstructor).length===0&&<span style={{color:T.muted}}>Sin datos</span>}
-                {r.key==="honorarios"&&byAportes.length>0&&(
+                {r.key==="acobrar"?(
                   <>
-                    <div style={{margin:"6px 0 4px",borderTop:`1px solid ${T.border}`,paddingTop:6,color:T.muted,fontSize:10}}>Aportes own class (descuento)</div>
-                    {byAportes.map((d,i)=>(
-                      <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:i<byAportes.length-1?`1px solid ${T.border}`:"none"}}>
-                        <span style={{color:T.textDim}}>{d.name}  <span style={{color:T.muted}}>({d.clases} clase{d.clases!==1?"s":""})</span></span>
-                        <span style={{fontFamily:"monospace",color:T.green,fontWeight:600}}>−{fmt(d.amount)}</span>
+                    {byVendedorACobrarPasado.length>0&&(
+                      <>
+                        <div style={{color:T.orange,fontWeight:700,fontSize:10,textTransform:"uppercase",marginBottom:4}}>Dado sin cobrar — {fmt(aCobrarPasado)}</div>
+                        {byVendedorACobrarPasado.map((d,i)=>(
+                          <div key={i}>
+                            <div onClick={()=>setExpandedVendedorPasado(p=>p===i?null:i)} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:expandedVendedorPasado===i||i<byVendedorACobrarPasado.length-1?`1px solid ${T.border}`:"none",cursor:"pointer",userSelect:"none"}}>
+                              <span style={{color:T.textDim}}>{d.name}  <span style={{color:T.muted}}>({d.clases} clase{d.clases!==1?"s":""})</span> <span style={{fontSize:9,color:T.muted}}>{expandedVendedorPasado===i?"▲":"▼"}</span></span>
+                              <span style={{fontFamily:"monospace",color:T.orange,fontWeight:600}}>{fmt(d.amount)}</span>
+                            </div>
+                            {expandedVendedorPasado===i&&(
+                              <div style={{background:`${T.orange}08`,borderRadius:6,padding:"6px 10px",marginBottom:4}}>
+                                {d.items.sort((a,b)=>a.classDate.localeCompare(b.classDate)).map((c,j)=>{
+                                  const instr=staff.find(x=>x.id===c.instructorId);
+                                  return(
+                                  <div key={j} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"3px 0",borderBottom:j<d.items.length-1?`1px solid ${T.border}33`:"none",fontSize:10}}>
+                                    <div style={{display:"flex",flexDirection:"column",gap:1}}>
+                                      <span style={{color:T.text,fontWeight:600}}>{c.clientName||"—"}</span>
+                                      <span style={{color:T.muted}}>{fmtDate(c.classDate)} · {instr?.name||"Sin instructor"}</span>
+                                    </div>
+                                    <span style={{fontFamily:"monospace",color:T.orange,fontWeight:700}}>{fmt(c.amount-c.paidAmount)}</span>
+                                  </div>
+                                );})}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </>
+                    )}
+                    {byVendedorACobrarFuturo.length>0&&(
+                      <>
+                        <div style={{color:T.textDim,fontWeight:700,fontSize:10,textTransform:"uppercase",marginTop:byVendedorACobrarPasado.length>0?8:0,marginBottom:4}}>Futuro — {fmt(aCobrarFuturo)}</div>
+                        {byVendedorACobrarFuturo.map((d,i)=>(
+                          <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:i<byVendedorACobrarFuturo.length-1?`1px solid ${T.border}`:"none"}}>
+                            <span style={{color:T.textDim}}>{d.name}  <span style={{color:T.muted}}>({d.clases} clase{d.clases!==1?"s":""})</span></span>
+                            <span style={{fontFamily:"monospace",color:T.textDim,fontWeight:600}}>{fmt(d.amount)}</span>
+                          </div>
+                        ))}
+                      </>
+                    )}
+                    {byVendedorACobrarPasado.length===0&&byVendedorACobrarFuturo.length===0&&<span style={{color:T.muted}}>Sin datos</span>}
+                  </>
+                ):(
+                  <>
+                    {(r.key==="comisiones"?byVendedor:byInstructor).map((d,i)=>{
+                      const list=r.key==="comisiones"?byVendedor:byInstructor;
+                      return(
+                      <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:i<list.length-1?`1px solid ${T.border}`:"none"}}>
+                        <span style={{color:d.estimated?T.orange:T.textDim}}>{d.name}{d.estimated?" ⚠":""}  <span style={{color:T.muted}}>({d.clases} clase{d.clases!==1?"s":""})</span></span>
+                        <span style={{fontFamily:"monospace",color:d.estimated?T.orange:r.color,fontWeight:600}}>{fmt(d.amount)}</span>
                       </div>
-                    ))}
+                    );})}
+                    {(r.key==="comisiones"?byVendedor:byInstructor).length===0&&<span style={{color:T.muted}}>Sin datos</span>}
+                    {r.key==="honorarios"&&byAportes.length>0&&(
+                      <>
+                        <div style={{margin:"6px 0 4px",borderTop:`1px solid ${T.border}`,paddingTop:6,color:T.muted,fontSize:10}}>Aportes own class (descuento)</div>
+                        {byAportes.map((d,i)=>(
+                          <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:i<byAportes.length-1?`1px solid ${T.border}`:"none"}}>
+                            <span style={{color:T.textDim}}>{d.name}  <span style={{color:T.muted}}>({d.clases} clase{d.clases!==1?"s":""})</span></span>
+                            <span style={{fontFamily:"monospace",color:T.green,fontWeight:600}}>−{fmt(d.amount)}</span>
+                          </div>
+                        ))}
+                      </>
+                    )}
                   </>
                 )}
               </div>
@@ -1676,8 +1739,8 @@ function DesgloseNeto({ingresosBrutos,aCobrar,totalComisiones,honorariosAPagar,a
   );
 }
 
-function FinanzasPage({classes,expenses,staff,config,onAddExpense}){
-  const [newExp,setNewExp]=useState({amount:"",description:"",category:"general",date:today});
+function FinanzasPage({classes,expenses,staff,config,onAddExpense,onConfirmExpense}){
+  const [newExp,setNewExp]=useState({amount:"",description:"",category:"general",date:today,isPlanned:false});
   const [saving,setSaving]=useState(false);
   const [season,setSeason]=useState("current");
   const [customFrom,setCustomFrom]=useState(seasonRange().from);
@@ -1704,6 +1767,16 @@ function FinanzasPage({classes,expenses,staff,config,onAddExpense}){
     if(c.scenario==="own_class") return a;
     return a+(c.amount-c.paidAmount);
   },0);
+  const aCobrarPasado=filteredClasses.reduce((a,c)=>{
+    if(c.scenario==="own_class"||!c.classDone) return a;
+    const p=c.amount-c.paidAmount;
+    return p>0?a+p:a;
+  },0);
+  const aCobrarFuturo=filteredClasses.reduce((a,c)=>{
+    if(c.scenario==="own_class"||c.classDone) return a;
+    const p=c.amount-c.paidAmount;
+    return p>0?a+p:a;
+  },0);
   const ingresosProyectados=ingresosBrutos+aCobrar;
   const totalComisiones=filteredClasses.reduce((a,c)=>{
     if(c.scenario==="own_class") return a;
@@ -1712,14 +1785,17 @@ function FinanzasPage({classes,expenses,staff,config,onAddExpense}){
   const honorariosAPagar=filteredClasses.reduce((a,c)=>a+(c.instructorEarning||0),0)+estimatedInstrCost;
   const aportesStaff=filteredClasses.reduce((a,c)=>c.scenario==="own_class"&&c.schoolCut>0?a+c.schoolCut:a,0);
   const totalInstructores=honorariosAPagar-aportesStaff;
-  const totalGastos=filteredExpenses.reduce((a,e)=>a+e.amount,0);
+  const confirmedExpenses=filteredExpenses.filter(e=>!e.isPlanned);
+  const plannedExpenses=filteredExpenses.filter(e=>e.isPlanned);
+  const totalGastos=confirmedExpenses.reduce((a,e)=>a+e.amount,0);
+  const totalGastosPrevistos=plannedExpenses.reduce((a,e)=>a+e.amount,0);
   const netosAntes=ingresosBrutos-totalComisiones-totalInstructores;
   const netosFinal=netosAntes-totalGastos;
-  const netoProyectado=ingresosProyectados-totalComisiones-totalInstructores-totalGastos;
+  const netoProyectado=ingresosProyectados-totalComisiones-totalInstructores-totalGastos-totalGastosPrevistos;
   async function addExp(){
     if(!newExp.amount||!newExp.description)return;
     setSaving(true);
-    try{await onAddExpense({amount:+newExp.amount,description:newExp.description,category:newExp.category,date:newExp.date||today});setNewExp({amount:"",description:"",category:"general",date:today});}
+    try{await onAddExpense({amount:+newExp.amount,description:newExp.description,category:newExp.category,date:newExp.date||today,isPlanned:newExp.isPlanned});setNewExp({amount:"",description:"",category:"general",date:today,isPlanned:false});}
     finally{setSaving(false);}
   }
   return(
@@ -1742,10 +1818,10 @@ function FinanzasPage({classes,expenses,staff,config,onAddExpense}){
       {unassignedClasses.length>0&&<div style={{background:`${T.orange}10`,border:`1px solid ${T.orange}40`,borderRadius:10,padding:"10px 16px",fontSize:12,color:T.orange}}>⚠ <b>{unassignedClasses.length} clase{unassignedClasses.length!==1?"s":""} sin instructor</b> — se estimó un costo de <b>{fmt(estimatedInstrCost)}</b> ({fmt(defaultHourlyRate)}/h × horas de cada tipo). El neto se ajustará cuando se asignen.</div>}
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:14}}>
         <Card><Stat label="Cobrado" value={fmt(ingresosBrutos)} color={T.green} icon="↑"/></Card>
-        <Card><Stat label="A Cobrar" value={fmt(aCobrar)} color={aCobrar>0?T.orange:T.muted} icon="◑"/></Card>
+        <Card><Stat label="A Cobrar" value={fmt(aCobrar)} color={aCobrar>0?T.orange:T.muted} icon="◑" sub={`${fmt(aCobrarPasado)} dado · ${fmt(aCobrarFuturo)} futuro`}/></Card>
         <Card><Stat label="Comisiones Vendedores" value={fmt(totalComisiones)} color={T.cyan} icon="→"/></Card>
         <Card><Stat label="Honorarios Instructores" value={fmt(totalInstructores)} color={T.purple} icon="→" sub={aportesStaff>0?`incl. aportes −${fmt(aportesStaff)}`:undefined}/></Card>
-        <Card><Stat label="Gastos Operativos" value={fmt(totalGastos)} color={T.orange} icon="↓"/></Card>
+        <Card><Stat label="Gastos Operativos" value={fmt(totalGastos)} color={T.orange} icon="↓" sub={totalGastosPrevistos>0?`+ ${fmt(totalGastosPrevistos)} previstos`:undefined}/></Card>
         <Card style={{background:`${T.gold}08`,borderColor:`${T.gold}40`}}><Stat label="Neto Final" value={fmt(netosFinal)} color={T.gold} icon="★" sub="sobre lo cobrado"/></Card>
         <Card style={{background:`${T.teal}08`,borderColor:`${T.teal}40`}}><Stat label="Neto Proyectado" value={fmt(netoProyectado)} color={T.teal} icon="◎" sub="si se cobra todo"/></Card>
         <Card style={{background:`${T.purple}08`,borderColor:`${T.purple}40`}}><Stat label="Bonus Iona (10%)" value={fmt(netoProyectado*0.1)} color={T.purple} icon="◈" sub="informativo · sobre neto proyectado"/></Card>
@@ -1761,18 +1837,44 @@ function FinanzasPage({classes,expenses,staff,config,onAddExpense}){
             </div>
             <Inp label="Fecha" type="date" value={newExp.date} onChange={v=>setNewExp(p=>({...p,date:v}))} required/>
             <Inp label="Descripción" value={newExp.description} onChange={v=>setNewExp(p=>({...p,description:v}))} placeholder="Ej: Mantenimiento tablas, Combustible..." required/>
+            <label style={{display:"flex",alignItems:"center",gap:8,fontSize:13,color:T.textDim,cursor:"pointer",userSelect:"none"}}>
+              <input type="checkbox" checked={newExp.isPlanned} onChange={e=>setNewExp(p=>({...p,isPlanned:e.target.checked}))} style={{accentColor:T.orange,width:15,height:15}}/>
+              Gasto previsto (no confirmado)
+            </label>
             <Btn variant="teal" full disabled={saving} onClick={addExp}>{saving?"Guardando...":"＋ Registrar Gasto"}</Btn>
           </div>
         </Card>
         <DesgloseNeto
-          ingresosBrutos={ingresosBrutos} aCobrar={aCobrar}
+          ingresosBrutos={ingresosBrutos} aCobrar={aCobrar} aCobrarPasado={aCobrarPasado} aCobrarFuturo={aCobrarFuturo}
           totalComisiones={totalComisiones} honorariosAPagar={honorariosAPagar} aportesStaff={aportesStaff} totalInstructores={totalInstructores}
-          totalGastos={totalGastos} netosFinal={netosFinal} netoProyectado={netoProyectado}
+          totalGastos={totalGastos} totalGastosPrevistos={totalGastosPrevistos} netosFinal={netosFinal} netoProyectado={netoProyectado}
           filteredClasses={filteredClasses} staff={staff}
           estimatedInstrCost={estimatedInstrCost} unassignedClasses={unassignedClasses}
           defaultHourlyRate={defaultHourlyRate}
         />
       </div>
+      {plannedExpenses.length>0&&(
+        <Card style={{padding:0,overflow:"hidden",border:`1px solid ${T.orange}40`}}>
+          <div style={{padding:"14px 16px",borderBottom:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between",background:`${T.orange}08`}}>
+            <SectionTitle>Gastos Previstos</SectionTitle>
+            <span style={{fontSize:12,color:T.textDim}}>Total: <b style={{color:T.orange}}>{fmt(totalGastosPrevistos)}</b></span>
+          </div>
+          <table style={{width:"100%",borderCollapse:"collapse"}}>
+            <thead><tr>{["Fecha","Descripción","Categoría","Monto",""].map(h=><TH key={h}>{h}</TH>)}</tr></thead>
+            <tbody>
+              {plannedExpenses.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(e=>(
+                <tr key={e.id}>
+                  <TD style={{fontSize:12,color:T.textDim}}>{fmtDate(e.date)}</TD>
+                  <TD style={{fontWeight:600}}>{e.description}</TD>
+                  <TD><Badge text={e.category} color={T.orange} small/></TD>
+                  <TD style={{fontFamily:"monospace",color:T.orange,fontWeight:700}}>{fmt(e.amount)}</TD>
+                  <TD><Btn size="sm" variant="ghost" onClick={()=>onConfirmExpense&&onConfirmExpense(e.id)}>✓ Gastado</Btn></TD>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      )}
       <Card style={{padding:0,overflow:"hidden"}}>
         <div style={{padding:"14px 16px",borderBottom:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between"}}>
           <SectionTitle>Registro de Gastos</SectionTitle>
@@ -1781,8 +1883,8 @@ function FinanzasPage({classes,expenses,staff,config,onAddExpense}){
         <table style={{width:"100%",borderCollapse:"collapse"}}>
           <thead><tr>{["Fecha","Descripción","Categoría","Monto"].map(h=><TH key={h}>{h}</TH>)}</tr></thead>
           <tbody>
-            {filteredExpenses.slice().reverse().map(e=>(<tr key={e.id}><TD style={{fontSize:12,color:T.textDim}}>{fmtDate(e.date)}</TD><TD style={{fontWeight:600}}>{e.description}</TD><TD><Badge text={e.category} color={T.orange} small/></TD><TD style={{fontFamily:"monospace",color:T.orange,fontWeight:700}}>{fmt(e.amount)}</TD></tr>))}
-            {filteredExpenses.length===0&&<tr><td colSpan={4}><Empty text="Sin gastos"/></td></tr>}
+            {confirmedExpenses.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(e=>(<tr key={e.id}><TD style={{fontSize:12,color:T.textDim}}>{fmtDate(e.date)}</TD><TD style={{fontWeight:600}}>{e.description}</TD><TD><Badge text={e.category} color={T.orange} small/></TD><TD style={{fontFamily:"monospace",color:T.orange,fontWeight:700}}>{fmt(e.amount)}</TD></tr>))}
+            {confirmedExpenses.length===0&&<tr><td colSpan={4}><Empty text="Sin gastos"/></td></tr>}
           </tbody>
         </table>
       </Card>

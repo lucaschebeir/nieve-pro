@@ -362,7 +362,17 @@ export function useExpenses() {
         description:  expenseData.description,
         category:     expenseData.category || "general",
         expense_date: expenseData.date || new Date().toISOString().split("T")[0],
+        is_planned:   expenseData.isPlanned || false,
       });
+    if (error) throw error;
+    refetch();
+  }
+
+  async function confirmExpense(id) {
+    const { error } = await supabase
+      .from("expenses")
+      .update({ is_planned: false })
+      .eq("id", id);
     if (error) throw error;
     refetch();
   }
@@ -382,9 +392,10 @@ export function useExpenses() {
     description: e.description,
     category:    e.category,
     date:        e.expense_date,
+    isPlanned:   e.is_planned,
   }));
 
-  return { expenses: mapped, loading, error, refetch, addExpense, deleteExpense };
+  return { expenses: mapped, loading, error, refetch, addExpense, confirmExpense, deleteExpense };
 }
 
 // ─── CONFIG ───────────────────────────────────────────────────
