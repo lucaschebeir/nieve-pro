@@ -348,7 +348,7 @@ function ModalClassEdit({data,staff,clients,classes,config,onSave,onClose}){
     const seller=staff.find(s=>s.id===next.sellerId);
     const instr=staff.find(s=>s.id===next.instructorId);
     const scenario=calcScenario(next.sellerId,next.instructorId);
-    if(next.amount) setPreview({scenario,seller,instructor:instr,hours:ct?.hours||0,...calcEarnings(+next.amount,scenario,seller,instr,config.schoolCutPct,ct?.hours||0)});
+    if(next.amount) setPreview({scenario,seller,instructor:instr,hours:ct?.hours||0,...calcEarnings(+next.amount,scenario,seller,instr,seller?.schoolCutPct??config.schoolCutPct,ct?.hours||0)});
   }
 
   async function submit(){
@@ -589,7 +589,7 @@ function ModalExtraCommission({staff,onSave,onClose}){
   );
 }
 function ModalStaffEdit({data,config,onSave,onClose}){
-  const [form,setForm]=useState(data?{...data}:{name:"",email:"",phone:"",role:"seller",commissionPct:10,hourlyRate:15,isActive:true,isAdminViewer:false});
+  const [form,setForm]=useState(data?{...data}:{name:"",email:"",phone:"",role:"seller",commissionPct:10,hourlyRate:15,schoolCutPct:10,isActive:true,isAdminViewer:false});
   const [saving,setSaving]=useState(false);
   async function submit(){
     setSaving(true);
@@ -609,6 +609,7 @@ function ModalStaffEdit({data,config,onSave,onClose}){
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
           {(form.role==="seller"||form.role==="both")&&<Inp label="Comisión %" type="number" value={String(form.commissionPct)} onChange={v=>setForm(p=>({...p,commissionPct:+v}))}/>}
           {(form.role==="instructor"||form.role==="both")&&<Inp label="$/hora" type="number" value={String(form.hourlyRate)} onChange={v=>setForm(p=>({...p,hourlyRate:+v}))}/>}
+          {(form.role==="instructor"||form.role==="both")&&<Inp label="% Escuela clase propia" type="number" value={String(form.schoolCutPct??10)} onChange={v=>setForm(p=>({...p,schoolCutPct:+v}))}/>}
         </div>
         <div style={{display:"flex",flexDirection:"column",gap:10}}>
   <div style={{display:"flex",alignItems:"center",gap:10}}>
@@ -820,7 +821,7 @@ function AdminApp() {
       const instructor = staff.find(s => s.id === c.instructorId);
       const ownId = scenario === "own_class" ? (c.sellerId || c.instructorId) : null;
       const isOwner = ownId ? !!freshMap[ownId]?.is_owner : false;
-      const schoolCutPct = isOwner ? 0 : (config.schoolCutPct || 0);
+      const schoolCutPct = isOwner ? 0 : (instructor?.schoolCutPct ?? config.schoolCutPct ?? 10);
       const hours = c.instructorHours || 0;
       const earnings = calcEarnings(c.amount, scenario, seller, instructor, schoolCutPct, hours);
       const { error } = await supabase.from("classes").update({
@@ -1125,6 +1126,7 @@ function ClassesPage({classes,staff,clients,onEdit,onNew,onClientClick,onFinance
   const [payF,setPayF]=useState("all");
   const [instrF,setInstrF]=useState("all");
   const [settF,setSettF]=useState("pending");
+  const [sellerF,setSellerF]=useState("all");
   const [search,setSearch]=useState("");
   const [season,setSeason]=useState("current");
   const [customFrom,setCustomFrom]=useState(seasonRange().from);
@@ -1149,9 +1151,10 @@ function ClassesPage({classes,staff,clients,onEdit,onNew,onClientClick,onFinance
     if(instrF!=="all"&&c.instructorStatus!==instrF)return false;
     if(settF==="pending"&&c.isSettled)return false;
     if(settF==="settled"&&!c.isSettled)return false;
+    if(sellerF!=="all"&&c.sellerId!==sellerF)return false;
     if(search&&!c.clientName?.toLowerCase().includes(search.toLowerCase())&&!c.notes?.toLowerCase().includes(search.toLowerCase()))return false;
     return true;
-  }),[classes,sfrom,sto,payF,instrF,settF,search]);
+  }),[classes,sfrom,sto,payF,instrF,settF,sellerF,search]);
 
   const sorted=useMemo(()=>[...filtered].sort((a,b)=>sortDir==="asc"?a.classDate.localeCompare(b.classDate):b.classDate.localeCompare(a.classDate)),[filtered,sortDir]);
 
@@ -1251,6 +1254,10 @@ function ClassesPage({classes,staff,clients,onEdit,onNew,onClientClick,onFinance
           <div style={{display:"flex",gap:4}}><span style={{fontSize:10,color:T.muted,alignSelf:"center"}}>PAGO:</span>{[["all","Todos"],["reserved","Reservado"],["partial","Parcial"],["paid","Pagado"]].map(([v,l])=><Btn key={v} variant={payF===v?"primary":"ghost"} size="sm" onClick={()=>setPayF(v)}>{l}</Btn>)}</div>
           <div style={{display:"flex",gap:4}}><span style={{fontSize:10,color:T.muted,alignSelf:"center"}}>INSTR:</span>{[["all","Todos"],["unassigned","Sin Asignar"],["assigned","Asignada"],["done","Dada"]].map(([v,l])=><Btn key={v} variant={instrF===v?"primary":"ghost"} size="sm" onClick={()=>setInstrF(v)}>{l}</Btn>)}</div>
           <div style={{display:"flex",gap:4}}><span style={{fontSize:10,color:T.muted,alignSelf:"center"}}>ESTADO:</span>{[["pending","Pendientes"],["settled","Liquidadas"],["all","Todas"]].map(([v,l])=><Btn key={v} variant={settF===v?"primary":"ghost"} size="sm" onClick={()=>setSettF(v)}>{l}</Btn>)}</div>
+          <select value={sellerF} onChange={e=>setSellerF(e.target.value)} style={{background:T.surface,border:`1px solid ${sellerF!=="all"?T.cyan:T.border}`,color:sellerF!=="all"?T.cyan:T.textDim,borderRadius:7,padding:"6px 10px",fontSize:12,fontFamily:"inherit",outline:"none",cursor:"pointer"}}>
+            <option value="all">Vendedor: Todos</option>
+            {staff.filter(s=>classes.some(c=>c.sellerId===s.id)).map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
           <Btn variant="primary" size="sm" onClick={onNew} style={{marginLeft:"auto"}}>＋ Nueva</Btn>
         </div>
         {selected.size>=2&&onGroupClasses&&(
@@ -1979,6 +1986,7 @@ function ConfigPage({config,onSave,staff,onSaveStaff,onRecalculate}){
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
             {(s.role==="seller"||s.role==="both")&&<Inp label="Comisión %" type="number" value={String(s.commissionPct)} onChange={v=>onSaveStaff({...s,commissionPct:+v})} small/>}
             {(s.role==="instructor"||s.role==="both")&&<Inp label="$/hora" type="number" value={String(s.hourlyRate)} onChange={v=>onSaveStaff({...s,hourlyRate:+v})} small/>}
+            {(s.role==="instructor"||s.role==="both")&&<Inp label="% Escuela propia" type="number" value={String(s.schoolCutPct??10)} onChange={v=>onSaveStaff({...s,schoolCutPct:+v})} small/>}
           </div>
           <Btn variant="ghost" size="sm" style={{marginTop:6}} onClick={async()=>{try{await onRecalculate(s.id);}catch(e){alert("Error: "+e.message);}}}>↺ Recalcular clases</Btn>
         </div>))}
