@@ -10,7 +10,7 @@ import { useAuth } from "./context/AuthContext";
 import LoginScreen from "./components/LoginScreen";
 import {
   useStaff, useClients, useClasses,
-  useSettlements, useExpenses, useConfig, usePendingBalances, useExtraCommissions
+  useSettlements, useExpenses, useConfig, usePendingBalances, useExtraCommissions, useConversions
 } from "./hooks/useData";
 import { supabase } from "./supabase";
 
@@ -291,7 +291,7 @@ function ModalClassEdit({data,staff,clients,classes,config,onSave,onClose}){
     return "09:30";
   }
 
-  const empty={classDate:today,classTypeId:"",classTypeName:"",amount:"550",peopleCount:"1",sellerId:"",instructorId:"",clientId:"",clientName:"",notes:"",reservationAmount:"",paidAmount:"",classDone:false,discipline:"ski",horarioInicio:""};
+  const empty={classDate:today,classTypeId:"",classTypeName:"",amount:"550",peopleCount:"1",sellerId:"",instructorId:"",clientId:"",clientName:"",notes:"",reservationAmount:"",paidAmount:"",classDone:false,discipline:"ski",horarioInicio:"",currency:"USD"};
   const [form,setForm]=useState(data?{...data,amount:String(data.amount),peopleCount:String(data.peopleCount),reservationAmount:String(data.reservationAmount||0),paidAmount:String(data.paidAmount||0),sellerId:data.sellerId||"",instructorId:data.instructorId||"",clientId:data.clientId||"",horarioInicio:autoHorario(data.classTypeId,data.horarioInicio)}:empty);
   const [preview,setPreview]=useState(null);
   const [classDates, setClassDates] = useState(data ? [data.classDate] : [today]);
@@ -442,7 +442,10 @@ function ModalClassEdit({data,staff,clients,classes,config,onSave,onClose}){
               <span style={{fontSize:11,color:T.textDim,marginTop:2}}>Podés guardar igual si querés.</span>
             </div>
           )}
-<Inp label="Disciplina" value={form.discipline||"ski"} onChange={v=>set("discipline",v)} options={[{value:"ski",label:"🎿 Esquí"},{value:"snowboard",label:"🏂 Snowboard"}]}/>
+<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <Inp label="Disciplina" value={form.discipline||"ski"} onChange={v=>set("discipline",v)} options={[{value:"ski",label:"🎿 Esquí"},{value:"snowboard",label:"🏂 Snowboard"}]}/>
+            <Inp label="Moneda" value={form.currency||"USD"} onChange={v=>set("currency",v)} options={[{value:"USD",label:"💵 USD"},{value:"ARS",label:"🇦🇷 ARS"}]}/>
+          </div>
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
   <div style={{display:"flex",alignItems:"center",gap:8}}>
     <input type="checkbox" id="done" checked={form.classDone} onChange={e=>set("classDone",e.target.checked)} style={{accentColor:T.green,width:16,height:16}}/>
@@ -562,6 +565,40 @@ function ModalClientEdit({data,staff,clients,onSave,onClose}){
 }
 
 // ─── MODAL: STAFF ─────────────────────────────────────────────────────────────
+function ModalAddConversion({onSave,onClose}){
+  const [arsAmount,setArsAmount]=useState("");
+  const [exchangeRate,setExchangeRate]=useState("");
+  const [date,setDate]=useState(today);
+  const [notes,setNotes]=useState("");
+  const [saving,setSaving]=useState(false);
+  const usdAmount=arsAmount&&exchangeRate?(+arsAmount/+exchangeRate).toFixed(2):"";
+  async function submit(){
+    if(!arsAmount||!exchangeRate) return;
+    setSaving(true);
+    try{ await onSave({date,arsAmount:+arsAmount,exchangeRate:+exchangeRate,usdAmount:+usdAmount,notes}); }
+    catch(e){ alert("Error: "+e.message); }
+    finally{ setSaving(false); }
+  }
+  return(
+    <Modal title="Registrar Conversión ARS → USD" onClose={onClose}>
+      <div style={{display:"flex",flexDirection:"column",gap:13}}>
+        <Inp label="Fecha" type="date" value={date} onChange={setDate}/>
+        <Inp label="Monto ARS" type="number" value={arsAmount} onChange={setArsAmount} placeholder="Ej: 500000" required/>
+        <Inp label="Tipo de cambio (ARS por USD)" type="number" value={exchangeRate} onChange={setExchangeRate} placeholder="Ej: 1200" required/>
+        {usdAmount&&<div style={{background:`${T.green}10`,border:`1px solid ${T.green}30`,borderRadius:8,padding:"10px 14px",fontSize:13}}>
+          <span style={{color:T.textDim}}>USD resultante: </span>
+          <span style={{fontFamily:"monospace",fontWeight:800,color:T.green}}>${usdAmount}</span>
+        </div>}
+        <Inp label="Notas (opcional)" value={notes} onChange={setNotes} placeholder="Ej: Cueva calle Florida"/>
+      </div>
+      <div style={{display:"flex",gap:10,marginTop:18}}>
+        <Btn full disabled={saving||!arsAmount||!exchangeRate} onClick={submit}>{saving?"Guardando...":"✓ Registrar Conversión"}</Btn>
+        <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
+      </div>
+    </Modal>
+  );
+}
+
 function ModalExtraCommission({staff,onSave,onClose}){
   const [amount,setAmount]=useState("");
   const [desc,setDesc]=useState("");
@@ -742,6 +779,7 @@ function AdminApp() {
   const { settlements, loading: stL, settlePeriod } = useSettlements();
   const { expenses, loading: eL, addExpense, confirmExpense } = useExpenses();
   const { extraCommissions, addExtraCommission, settleExtraCommissions, deleteExtraCommission, refetch: refetchExtra } = useExtraCommissions();
+  const { conversions, addConversion, deleteConversion } = useConversions();
   const { config, saveConfig } = useConfig();
   const { getBalance, refetch: refetchBalances } = usePendingBalances();
 
@@ -1013,7 +1051,7 @@ function AdminApp() {
         {page==="classes"  &&<ClassesPage classes={enrichedClasses} staff={staff} clients={clients} onEdit={isViewer?undefined:c=>setModal({type:"class_edit",data:c})} onNew={isViewer?undefined:()=>setModal({type:"class_edit",data:null})} onClientClick={goToClient} onFinanceClick={c=>setModal({type:"class_finance",data:c})} onDelete={isViewer?undefined:async(id)=>{await deleteClass(id);showToast("✓ Clase eliminada")}} onGroupClasses={isViewer?undefined:groupClasses} onUngroupClasses={isViewer?undefined:ungroupClasses} onGroupPayment={isViewer?undefined:registerGroupPayment}/>}
         {page==="clients"  &&<ClientsPage clients={clients} staff={staff} classes={enrichedClasses} selectedClientId={selectedClientId} onClearSelected={()=>setSelectedClientId(null)} onEdit={isViewer?undefined:c=>setModal({type:"client_edit",data:c})} onNew={isViewer?undefined:()=>setModal({type:"client_edit",data:null})}/>}
         {page==="staff"    &&<StaffPage staff={staff} getBalance={getBalance} settlements={settlements} clients={clients} classes={enrichedClasses} selectedStaffId={selectedStaffId} onClearSelected={()=>setSelectedStaffId(null)} onToggle={isViewer?undefined:handleToggle} onEdit={isViewer?undefined:s=>setModal({type:"staff_edit",data:s})} onNew={isViewer?undefined:()=>setModal({type:"staff_edit",data:null})} onSettle={isViewer?undefined:s=>setModal({type:"settle",data:{staffId:s.id,name:s.name}})} extraCommissions={extraCommissions} onAddExtra={isViewer?undefined:s=>setModal({type:"extra_commission",data:s})} onDeleteExtra={isViewer?undefined:async(id)=>{await deleteExtraCommission(id);showToast("✓ Comisión eliminada");}}/>}
-        {page==="finanzas" &&<FinanzasPage classes={enrichedClasses} expenses={expenses} staff={staff} config={config} onAddExpense={isViewer?undefined:addExpense} onConfirmExpense={isViewer?undefined:confirmExpense}/>}
+        {page==="finanzas" &&<FinanzasPage classes={enrichedClasses} expenses={expenses} staff={staff} config={config} conversions={conversions} onAddExpense={isViewer?undefined:addExpense} onConfirmExpense={isViewer?undefined:confirmExpense} onAddConversion={isViewer?undefined:addConversion} onDeleteConversion={isViewer?undefined:deleteConversion}/>}
         {page==="stats"    &&<EstadisticasPage classes={enrichedClasses} staff={staff} clients={clients} config={config}/>}
         {page==="search"   &&<SearchPage clients={clients} classes={enrichedClasses} staff={staff} onViewClient={c=>{setSelectedClientId(c.id);setPage("clients");}}/>}
         {page==="config"   &&<ConfigPage config={config} onSave={async (c)=>{await saveConfig(c);showToast("✓ Configuración guardada");}} staff={staff} onSaveStaff={handleSaveStaff} onRecalculate={handleRecalculateClasses}/>}
@@ -1746,8 +1784,9 @@ function DesgloseNeto({ingresosBrutos,aCobrar,aCobrarPasado,aCobrarFuturo,totalC
   );
 }
 
-function FinanzasPage({classes,expenses,staff,config,onAddExpense,onConfirmExpense}){
+function FinanzasPage({classes,expenses,staff,config,conversions,onAddExpense,onConfirmExpense,onAddConversion,onDeleteConversion}){
   const [newExp,setNewExp]=useState({amount:"",description:"",category:"general",date:today,isPlanned:false});
+  const [showConvModal,setShowConvModal]=useState(false);
   const [saving,setSaving]=useState(false);
   const [season,setSeason]=useState("current");
   const [customFrom,setCustomFrom]=useState(seasonRange().from);
@@ -1760,38 +1799,49 @@ function FinanzasPage({classes,expenses,staff,config,onAddExpense,onConfirmExpen
   },[season,customFrom,customTo]);
   const filteredClasses=useMemo(()=>classes.filter(c=>c.classDate>=sfrom&&c.classDate<=sto),[classes,sfrom,sto]);
   const filteredExpenses=useMemo(()=>expenses.filter(e=>e.date>=sfrom&&e.date<=sto),[expenses,sfrom,sto]);
+  const filteredConversions=useMemo(()=>(conversions||[]).filter(c=>c.date>=sfrom&&c.date<=sto),[conversions,sfrom,sto]);
+  const usdClasses=useMemo(()=>filteredClasses.filter(c=>c.currency!=="ARS"),[filteredClasses]);
+  const arsClasses=useMemo(()=>filteredClasses.filter(c=>c.currency==="ARS"),[filteredClasses]);
   const defaultHourlyRate=40;
-  const unassignedClasses=filteredClasses.filter(c=>!c.instructorId&&c.scenario!=="own_class");
+  const unassignedClasses=usdClasses.filter(c=>!c.instructorId&&c.scenario!=="own_class");
   const estimatedInstrCost=unassignedClasses.reduce((a,c)=>{
     const hours=c.instructorHours||config.rates.find(r=>r.id===c.classTypeId)?.hours||0;
     return a+hours*defaultHourlyRate;
   },0);
-  const ingresosBrutos=filteredClasses.reduce((a,c)=>{
-    if(c.scenario==="own_class") return a; // excluido (staff aportes + clases dueños)
+  const totalConversionesUSD=filteredConversions.reduce((a,c)=>a+c.usdAmount,0);
+  const ingresosBrutos=usdClasses.reduce((a,c)=>{
+    if(c.scenario==="own_class") return a;
     return a+c.paidAmount;
-  },0);
-  const aCobrar=filteredClasses.reduce((a,c)=>{
+  },0)+totalConversionesUSD;
+  const aCobrar=usdClasses.reduce((a,c)=>{
     if(c.scenario==="own_class") return a;
     return a+(c.amount-c.paidAmount);
   },0);
-  const aCobrarPasado=filteredClasses.reduce((a,c)=>{
+  const aCobrarPasado=usdClasses.reduce((a,c)=>{
     if(c.scenario==="own_class"||!c.classDone) return a;
     const p=c.amount-c.paidAmount;
     return p>0?a+p:a;
   },0);
-  const aCobrarFuturo=filteredClasses.reduce((a,c)=>{
+  const aCobrarFuturo=usdClasses.reduce((a,c)=>{
     if(c.scenario==="own_class"||c.classDone) return a;
     const p=c.amount-c.paidAmount;
     return p>0?a+p:a;
   },0);
   const ingresosProyectados=ingresosBrutos+aCobrar;
-  const totalComisiones=filteredClasses.reduce((a,c)=>{
+  const totalComisiones=usdClasses.reduce((a,c)=>{
     if(c.scenario==="own_class") return a;
     return a+(c.sellerCommission||0);
   },0);
   const honorariosAPagar=filteredClasses.reduce((a,c)=>a+(c.instructorEarning||0),0)+estimatedInstrCost;
-  const aportesStaff=filteredClasses.reduce((a,c)=>c.scenario==="own_class"&&c.schoolCut>0?a+c.schoolCut:a,0);
+  const aportesStaff=usdClasses.reduce((a,c)=>c.scenario==="own_class"&&c.schoolCut>0?a+c.schoolCut:a,0);
   const totalInstructores=honorariosAPagar-aportesStaff;
+  // ARS
+  const arsFacturado=arsClasses.reduce((a,c)=>c.scenario==="own_class"?a:a+c.amount,0);
+  const arsCobrado=arsClasses.reduce((a,c)=>c.scenario==="own_class"?a:a+c.paidAmount,0);
+  const arsACobrar=arsClasses.reduce((a,c)=>{
+    if(c.scenario==="own_class") return a;
+    const p=c.amount-c.paidAmount; return p>0?a+p:a;
+  },0);
   const confirmedExpenses=filteredExpenses.filter(e=>!e.isPlanned);
   const plannedExpenses=filteredExpenses.filter(e=>e.isPlanned);
   const totalGastos=confirmedExpenses.reduce((a,e)=>a+e.amount,0);
@@ -1855,11 +1905,59 @@ function FinanzasPage({classes,expenses,staff,config,onAddExpense,onConfirmExpen
           ingresosBrutos={ingresosBrutos} aCobrar={aCobrar} aCobrarPasado={aCobrarPasado} aCobrarFuturo={aCobrarFuturo}
           totalComisiones={totalComisiones} honorariosAPagar={honorariosAPagar} aportesStaff={aportesStaff} totalInstructores={totalInstructores}
           totalGastos={totalGastos} totalGastosPrevistos={totalGastosPrevistos} netosFinal={netosFinal} netoProyectado={netoProyectado}
-          filteredClasses={filteredClasses} staff={staff}
+          filteredClasses={usdClasses} staff={staff}
           estimatedInstrCost={estimatedInstrCost} unassignedClasses={unassignedClasses}
           defaultHourlyRate={defaultHourlyRate}
         />
       </div>
+      {(arsClasses.length>0||filteredConversions.length>0)&&(
+        <Card style={{padding:0,overflow:"hidden",border:`1px solid ${T.purple}40`}}>
+          <div style={{padding:"14px 16px",borderBottom:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",background:`${T.purple}08`}}>
+            <SectionTitle>🇦🇷 Ingresos en Pesos</SectionTitle>
+            {onAddConversion&&<Btn size="sm" variant="ghost" onClick={()=>setShowConvModal(true)}>＋ Registrar conversión</Btn>}
+          </div>
+          <div style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:12}}>
+            {arsClasses.length>0&&(
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:10}}>
+                <div style={{background:`${T.purple}0d`,border:`1px solid ${T.purple}25`,borderRadius:8,padding:"10px 14px"}}>
+                  <div style={{fontSize:10,color:T.textDim,textTransform:"uppercase",marginBottom:2}}>Facturado ARS</div>
+                  <div style={{fontFamily:"monospace",fontWeight:800,fontSize:18,color:T.purple}}>${arsFacturado.toLocaleString("es-AR")}</div>
+                </div>
+                <div style={{background:`${T.green}0d`,border:`1px solid ${T.green}25`,borderRadius:8,padding:"10px 14px"}}>
+                  <div style={{fontSize:10,color:T.textDim,textTransform:"uppercase",marginBottom:2}}>Cobrado ARS</div>
+                  <div style={{fontFamily:"monospace",fontWeight:800,fontSize:18,color:T.green}}>${arsCobrado.toLocaleString("es-AR")}</div>
+                </div>
+                <div style={{background:`${T.orange}0d`,border:`1px solid ${T.orange}25`,borderRadius:8,padding:"10px 14px"}}>
+                  <div style={{fontSize:10,color:T.textDim,textTransform:"uppercase",marginBottom:2}}>A Cobrar ARS</div>
+                  <div style={{fontFamily:"monospace",fontWeight:800,fontSize:18,color:T.orange}}>${arsACobrar.toLocaleString("es-AR")}</div>
+                </div>
+              </div>
+            )}
+            {filteredConversions.length>0&&(
+              <div>
+                <div style={{fontSize:11,color:T.muted,fontWeight:700,textTransform:"uppercase",marginBottom:8}}>Conversiones realizadas</div>
+                <table style={{width:"100%",borderCollapse:"collapse"}}>
+                  <thead><tr>{["Fecha","ARS","Cotización","USD obtenido","Notas",""].map(h=><TH key={h}>{h}</TH>)}</tr></thead>
+                  <tbody>
+                    {filteredConversions.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(c=>(
+                      <tr key={c.id}>
+                        <TD style={{fontSize:12,color:T.textDim}}>{fmtDate(c.date)}</TD>
+                        <TD style={{fontFamily:"monospace",color:T.purple,fontWeight:700}}>${c.arsAmount.toLocaleString("es-AR")}</TD>
+                        <TD style={{fontFamily:"monospace",color:T.muted,fontSize:12}}>{c.exchangeRate}</TD>
+                        <TD style={{fontFamily:"monospace",color:T.green,fontWeight:700}}>{fmt(c.usdAmount)}</TD>
+                        <TD style={{fontSize:12,color:T.textDim}}>{c.notes||"—"}</TD>
+                        <TD>{onDeleteConversion&&<Btn size="sm" variant="ghost" onClick={()=>onDeleteConversion(c.id)} style={{color:T.red}}>✕</Btn>}</TD>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div style={{textAlign:"right",padding:"8px 12px",fontSize:12,color:T.textDim}}>Total convertido: <b style={{color:T.green,fontFamily:"monospace"}}>{fmt(totalConversionesUSD)}</b> USD</div>
+              </div>
+            )}
+            {arsClasses.length===0&&filteredConversions.length===0&&<Empty text="Sin clases en ARS ni conversiones"/>}
+          </div>
+        </Card>
+      )}
       {plannedExpenses.length>0&&(
         <Card style={{padding:0,overflow:"hidden",border:`1px solid ${T.orange}40`}}>
           <div style={{padding:"14px 16px",borderBottom:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between",background:`${T.orange}08`}}>
@@ -1895,6 +1993,7 @@ function FinanzasPage({classes,expenses,staff,config,onAddExpense,onConfirmExpen
           </tbody>
         </table>
       </Card>
+      {showConvModal&&<ModalAddConversion onSave={async(d)=>{await onAddConversion(d);setShowConvModal(false);}} onClose={()=>setShowConvModal(false)}/>}
     </div>
   );
 }

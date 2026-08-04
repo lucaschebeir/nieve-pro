@@ -206,6 +206,7 @@ export function useClasses() {
       paid_amount:         paidAmount,
       class_done:          !!formData.classDone,
       discipline:          formData.discipline || "ski",
+      currency:            formData.currency || "USD",
       is_required:         !!formData.isRequired,
       horario_inicio:           formData.horarioInicio || null,
       group_id:                 formData.groupId || null,
@@ -263,6 +264,7 @@ export function useClasses() {
     createdAt:              c.created_at?.split("T")[0],
     groupId:                c.group_id || null,
     confirmedByInstructor:  !!c.confirmed_by_instructor,
+    currency:               c.currency || "USD",
   }));
 
   async function updateClassSchedule(classId, { instructorId, horarioInicio }) {
@@ -535,4 +537,38 @@ async function deleteExtraCommission(id) {
   }
 
   return { extraCommissions: mapped, loading, error, refetch, addExtraCommission, settleExtraCommissions, deleteExtraCommission };
+}
+
+// ─── CONVERSIONS ──────────────────────────────────────────────
+export function useConversions() {
+  const { data, loading, error, refetch } = useTable("conversions", "*");
+
+  async function addConversion({ date, arsAmount, exchangeRate, usdAmount, notes }) {
+    const { error } = await supabase.from("conversions").insert({
+      conversion_date: date,
+      ars_amount:      +arsAmount,
+      exchange_rate:   +exchangeRate,
+      usd_amount:      +usdAmount,
+      notes:           notes || "",
+    });
+    if (error) throw error;
+    refetch();
+  }
+
+  async function deleteConversion(id) {
+    const { error } = await supabase.from("conversions").delete().eq("id", id);
+    if (error) throw error;
+    refetch();
+  }
+
+  const mapped = (data || []).map(c => ({
+    id:           c.id,
+    date:         c.conversion_date,
+    arsAmount:    c.ars_amount,
+    exchangeRate: c.exchange_rate,
+    usdAmount:    c.usd_amount,
+    notes:        c.notes,
+  }));
+
+  return { conversions: mapped, loading, error, refetch, addConversion, deleteConversion };
 }
