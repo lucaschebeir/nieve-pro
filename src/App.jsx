@@ -177,19 +177,24 @@ function DuplicateAlert({name,onContinue,onCancel}){
 function ClassFinanceModal({cls,staff,onClose}){
   const seller=staff.find(s=>s.id===cls.sellerId);
   const instr=staff.find(s=>s.id===cls.instructorId);
+  const isARS=cls.currency==="ARS";
+  const fmtC=n=>isARS?("$"+Number(n||0).toLocaleString("es-AR",{minimumFractionDigits:0,maximumFractionDigits:0})+" ARS"):fmt(n);
   return(
     <Modal title="Desglose Financiero" onClose={onClose} width={420}>
       <div style={{display:"flex",flexDirection:"column",gap:12}}>
         <div style={{background:T.surface,borderRadius:10,padding:14}}>
-          <div style={{fontSize:12,color:T.textDim}}>{fmtDate(cls.classDate)} · {cls.clientName}</div>
-          <div style={{fontSize:22,fontWeight:900,fontFamily:"monospace",marginTop:4}}>{fmt(cls.amount)}</div>
-          <div style={{fontSize:12,color:PAY_STATUS[cls.paymentStatus]?.color,marginTop:2}}>Cobrado: {fmt(cls.paidAmount)}</div>
+          <div style={{fontSize:12,color:T.textDim,display:"flex",gap:8,alignItems:"center"}}>
+            {fmtDate(cls.classDate)} · {cls.clientName}
+            {isARS&&<Badge text="ARS" color={T.purple} small/>}
+          </div>
+          <div style={{fontSize:22,fontWeight:900,fontFamily:"monospace",marginTop:4}}>{fmtC(cls.amount)}</div>
+          <div style={{fontSize:12,color:PAY_STATUS[cls.paymentStatus]?.color,marginTop:2}}>Cobrado: {fmtC(cls.paidAmount)}</div>
           <PayBar amount={cls.amount} paidAmount={cls.paidAmount}/>
         </div>
         {cls.sellerCommission>0&&(
           <div style={{display:"flex",justifyContent:"space-between",background:`${T.cyan}10`,border:`1px solid ${T.cyan}25`,borderRadius:8,padding:"10px 14px"}}>
             <div><div style={{fontSize:12,fontWeight:700,color:T.cyan}}>Comisión Vendedor</div><div style={{fontSize:11,color:T.textDim}}>{seller?.name} · {seller?.commissionPct}%</div></div>
-            <div style={{fontFamily:"monospace",fontWeight:800,color:T.cyan,fontSize:16,alignSelf:"center"}}>{fmt(cls.sellerCommission)}</div>
+            <div style={{fontFamily:"monospace",fontWeight:800,color:T.cyan,fontSize:16,alignSelf:"center"}}>{fmtC(cls.sellerCommission)}</div>
           </div>
         )}
         {cls.instructorEarning>0&&(
@@ -198,10 +203,17 @@ function ClassFinanceModal({cls,staff,onClose}){
             <div style={{fontFamily:"monospace",fontWeight:800,color:T.purple,fontSize:16,alignSelf:"center"}}>{fmt(cls.instructorEarning)}</div>
           </div>
         )}
-        <div style={{display:"flex",justifyContent:"space-between",background:`${T.green}10`,border:`1px solid ${T.green}25`,borderRadius:8,padding:"10px 14px"}}>
-          <div><div style={{fontSize:12,fontWeight:700,color:T.green}}>Ganancia Neta Escuela</div><div style={{fontSize:11,color:T.textDim}}>Monto − comisiones</div></div>
-          <div style={{fontFamily:"monospace",fontWeight:800,color:T.green,fontSize:16,alignSelf:"center"}}>{fmt(cls.schoolCut)}</div>
-        </div>
+        {!isARS&&(
+          <div style={{display:"flex",justifyContent:"space-between",background:`${T.green}10`,border:`1px solid ${T.green}25`,borderRadius:8,padding:"10px 14px"}}>
+            <div><div style={{fontSize:12,fontWeight:700,color:T.green}}>Ganancia Neta Escuela</div><div style={{fontSize:11,color:T.textDim}}>Monto − comisiones</div></div>
+            <div style={{fontFamily:"monospace",fontWeight:800,color:T.green,fontSize:16,alignSelf:"center"}}>{fmt(cls.schoolCut)}</div>
+          </div>
+        )}
+        {isARS&&(
+          <div style={{background:`${T.purple}08`,border:`1px solid ${T.purple}30`,borderRadius:8,padding:"10px 14px",fontSize:12,color:T.textDim}}>
+            💡 Ingreso en pesos — registrá la conversión a USD desde Finanzas cuando la realices.
+          </div>
+        )}
         <Badge text={SCENARIO_LABELS[cls.scenario]} color={SCENARIO_COLORS[cls.scenario]}/>
       </div>
     </Modal>
