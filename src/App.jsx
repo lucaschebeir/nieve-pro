@@ -1206,8 +1206,9 @@ function ClassesPage({classes,staff,clients,onEdit,onNew,onClientClick,onFinance
     return {groupMap:gm,ungrouped:ug};
   },[sorted]);
 
-  const totalM=filtered.reduce((a,c)=>c.scenario==="own_class"&&c.schoolCut>0?a:a+c.amount,0);
-  const totalC=filtered.reduce((a,c)=>c.scenario==="own_class"&&c.schoolCut>0?a:a+c.paidAmount,0);
+  const totalM=filtered.reduce((a,c)=>c.scenario==="own_class"&&c.schoolCut>0||c.currency==="ARS"?a:a+c.amount,0);
+  const totalC=filtered.reduce((a,c)=>c.scenario==="own_class"&&c.schoolCut>0||c.currency==="ARS"?a:a+c.paidAmount,0);
+  const arsCount=filtered.filter(c=>c.currency==="ARS").length;
 
   function toggleSelect(id){setSelected(s=>{const n=new Set(s);n.has(id)?n.delete(id):n.add(id);return n;});}
   function toggleGroup(gid){setExpandedGroups(s=>{const n=new Set(s);n.has(gid)?n.delete(gid):n.add(gid);return n;});}
@@ -1271,9 +1272,9 @@ function ClassesPage({classes,staff,clients,onEdit,onNew,onClientClick,onFinance
         </Modal>
       )}
       <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>
-        <Card style={{padding:"12px 16px"}}><Stat label="Monto Total" value={fmt(totalM)} color={T.text}/></Card>
-        <Card style={{padding:"12px 16px"}}><Stat label="Cobrado" value={fmt(totalC)} color={T.green}/></Card>
-        <Card style={{padding:"12px 16px"}}><Stat label="Saldo a Cobrar" value={fmt(totalM-totalC)} color={totalM-totalC>0?T.orange:T.green}/></Card>
+        <Card style={{padding:"12px 16px"}}><Stat label="Monto Total (USD)" value={fmt(totalM)} color={T.text} sub={arsCount>0?`+ ${arsCount} en ARS (ver Finanzas)`:undefined}/></Card>
+        <Card style={{padding:"12px 16px"}}><Stat label="Cobrado (USD)" value={fmt(totalC)} color={T.green}/></Card>
+        <Card style={{padding:"12px 16px"}}><Stat label="Saldo a Cobrar (USD)" value={fmt(totalM-totalC)} color={totalM-totalC>0?T.orange:T.green}/></Card>
       </div>
       <Card style={{padding:"14px 18px"}}>
         <div style={{display:"flex",flexWrap:"wrap",gap:8,alignItems:"center",marginBottom:10,paddingBottom:10,borderBottom:`1px solid ${T.border}`}}>
