@@ -696,7 +696,10 @@ function ModalSettle({name,staffId,classes,extraCommissions,onConfirm,onClose}){
     (classes||[]).filter(c=>c.classDone&&isPendingFor(c,staffId)&&c.classDate>=start&&c.classDate<=end)
       .sort((a,b)=>a.classDate.localeCompare(b.classDate))
   ,[classes,staffId,start,end]);
-  const toSettleWithEarn=useMemo(()=>toSettle.map(c=>{
+  const toSettleWithEarn=useMemo(()=>toSettle.filter(c=>{
+    const isInstr=c.instructorId===staffId&&(c.scenario==="instructor_only"||c.scenario==="seller_and_instructor");
+    return isInstr||c.currency!=="ARS"; // excluir clases ARS donde el staff es solo vendedor
+  }).map(c=>{
     const earn=(c.instructorId===staffId&&(c.scenario==="instructor_only"||c.scenario==="seller_and_instructor"))?c.instructorEarning:c.sellerCommission;
     return {...c,earn:earn||0};
   }),[toSettle,staffId]);
@@ -1087,8 +1090,10 @@ function AdminApp() {
 function calcPendingPast(classes, staffId){
   return classes.filter(c=>c.classDone&&isPendingFor(c,staffId))
     .reduce((a,c)=>{
-      const earn=(c.instructorId===staffId&&(c.scenario==="instructor_only"||c.scenario==="seller_and_instructor"))?c.instructorEarning:c.sellerCommission;
-      return a+(earn||0);
+      const isInstr=c.instructorId===staffId&&(c.scenario==="instructor_only"||c.scenario==="seller_and_instructor");
+      if(isInstr) return a+(c.instructorEarning||0); // honorario siempre USD
+      if(c.currency==="ARS") return a; // comisión vendedor en ARS: excluida del total USD
+      return a+(c.sellerCommission||0);
     },0);
 }
 
@@ -1508,8 +1513,10 @@ function StaffPage({staff,getBalance,settlements,clients,classes,extraCommission
     const bal=getBalance(viewStaff.id);
     const myClasses=classes.filter(c=>c.sellerId===viewStaff.id||c.instructorId===viewStaff.id).sort((a,b)=>b.classDate?.localeCompare(a.classDate));
     const pendingPast=myClasses.filter(c=>c.classDone&&isPendingFor(c,viewStaff.id)).reduce((a,c)=>{
-      const earn=(c.instructorId===viewStaff.id&&(c.scenario==="instructor_only"||c.scenario==="seller_and_instructor"))?c.instructorEarning:c.sellerCommission;
-      return a+(earn||0);
+      const isInstr=c.instructorId===viewStaff.id&&(c.scenario==="instructor_only"||c.scenario==="seller_and_instructor");
+      if(isInstr) return a+(c.instructorEarning||0);
+      if(c.currency==="ARS") return a;
+      return a+(c.sellerCommission||0);
     },0);
     const mySettlements=settlements.filter(s=>s.staffId===viewStaff.id);
     const myClients=clients.filter(c=>c.sellerId===viewStaff.id);
