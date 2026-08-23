@@ -368,6 +368,7 @@ export function useExpenses() {
         category:     expenseData.category || "general",
         expense_date: expenseData.date || new Date().toISOString().split("T")[0],
         is_planned:   expenseData.isPlanned || false,
+        currency:     expenseData.currency || "USD",
       });
     if (error) throw error;
     refetch();
@@ -398,6 +399,7 @@ export function useExpenses() {
     category:    e.category,
     date:        e.expense_date,
     isPlanned:   e.is_planned,
+    currency:    e.currency || "USD",
   }));
 
   return { expenses: mapped, loading, error, refetch, addExpense, confirmExpense, deleteExpense };
