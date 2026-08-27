@@ -666,7 +666,7 @@ function PlanningAdminView({ classes, staff, onUpdate, onEdit, onDelete, initial
   const [overlapWarn, setOverlapWarn] = useState(null);
 
   const weekDays = getWeekDays(anchorDate);
-  const instructors = sortInstructors(staff.filter(s => s.role === "instructor" || s.role === "both"));
+  const instructors = sortInstructors(staff.filter(s => (s.role === "instructor" || s.role === "both") && s.isActive));
 
   // Clases del día seleccionado
   const dayClasses = classes.filter(c => c.classDate === selectedDate);
@@ -1297,12 +1297,7 @@ function PlanningWeekOverview({ classes, staff, onEdit, onUpdate, initialDate, o
   const instructors = useMemo(() => {
     const weekClasses = classes.filter(c => weekDays.includes(c.classDate));
     const activeInstr = staff.filter(s => (s.role === "instructor" || s.role === "both") && s.isActive);
-    const extraIds = weekClasses
-      .filter(c => c.instructorId && !activeInstr.find(s => s.id === c.instructorId))
-      .map(c => c.instructorId)
-      .filter((id, i, arr) => arr.indexOf(id) === i);
-    const extra = extraIds.map(id => staff.find(s => s.id === id)).filter(Boolean);
-    return sortInstructors([...activeInstr, ...extra]);
+    return sortInstructors(activeInstr);
   }, [staff, classes, weekDays]);
 
   const hasUnassigned = useMemo(() =>
