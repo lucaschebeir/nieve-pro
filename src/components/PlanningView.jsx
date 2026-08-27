@@ -1,11 +1,13 @@
 // src/components/PlanningView.jsx
 // Módulo de Planning — grilla semanal (admin) y agenda diaria (instructor)
 
-const INSTR_ORDER_LAST  = ["julian","gastón","gaston","matías","matias"];
-const INSTR_ORDER_SEMI  = ["felipe","pablo"];
+const INSTR_ORDER_LAST       = ["julian","gastón","gaston","matías","matias"];
+const INSTR_ORDER_SEMI       = ["felipe","pablo"];
+const INSTR_ORDER_AFTER_SEMI = ["agustina"];
 function instrSortKey(name = "") {
   const n = name.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
-  if (INSTR_ORDER_LAST.some(k => n.startsWith(k))) return 2;
+  if (INSTR_ORDER_LAST.some(k => n.startsWith(k))) return 3;
+  if (INSTR_ORDER_AFTER_SEMI.some(k => n.startsWith(k))) return 2;
   if (INSTR_ORDER_SEMI.some(k => n.startsWith(k))) return 1;
   return 0;
 }
