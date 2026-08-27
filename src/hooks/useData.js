@@ -68,8 +68,8 @@ export function useStaff() {
         .from("staff")
         .insert({
           name:            staffData.name,
-          email:           staffData.email,
-          phone:           staffData.phone,
+          email:           staffData.email || null,
+          phone:           staffData.phone || null,
           role:            staffData.role,
           commission_pct:  staffData.commissionPct,
           hourly_rate:     staffData.hourlyRate,
