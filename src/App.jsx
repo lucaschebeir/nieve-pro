@@ -360,7 +360,7 @@ function ModalClassEdit({data,staff,clients,classes,config,onSave,onClose}){
     const seller=staff.find(s=>s.id===next.sellerId);
     const instr=staff.find(s=>s.id===next.instructorId);
     const scenario=calcScenario(next.sellerId,next.instructorId);
-    if(next.amount) setPreview({scenario,seller,instructor:instr,hours:ct?.hours||0,...calcEarnings(+next.amount,scenario,seller,instr,seller?.schoolCutPct??config.schoolCutPct,ct?.hours||0)});
+    if(next.amount) setPreview({scenario,seller,instructor:instr,hours:ct?.hours||0,...calcEarnings(+next.amount,scenario,seller,instr,seller?.schoolCutPct??config.schoolCutPct,ct?.hours||0,next.currency||"USD")});
   }
 
   async function submit(){
@@ -791,13 +791,13 @@ function calcScenario(sId,iId){
   if(sId&&!iId) return "seller_only";
   return "instructor_only";
 }
-function calcEarnings(amount,scenario,seller,instructor,schoolCutPct,hours){
-  const amt=+amount||0,hrs=+hours||0;
+function calcEarnings(amount,scenario,seller,instructor,schoolCutPct,hours,currency="USD"){
+  const amt=+amount||0,hrs=+hours||0,isARS=currency==="ARS";
   if(scenario==="own_class"){const cut=+(amt*(schoolCutPct/100)).toFixed(2);return{sellerCommission:+(amt-cut).toFixed(2),instructorEarning:0,schoolCut:cut,instructorHours:0,instructorHourlyRate:0};}
   if(scenario==="seller_only"){const comm=+(amt*((seller?.commissionPct||10)/100)).toFixed(2);return{sellerCommission:comm,instructorEarning:0,schoolCut:+(amt-comm).toFixed(2),instructorHours:0,instructorHourlyRate:0};}
-  if(scenario==="instructor_only"){const rate=+(instructor?.hourlyRate||15),earn=+(hrs*rate).toFixed(2);return{sellerCommission:0,instructorEarning:earn,schoolCut:+(amt-earn).toFixed(2),instructorHours:hrs,instructorHourlyRate:rate};}
+  if(scenario==="instructor_only"){const rate=+(instructor?.hourlyRate||15),earn=+(hrs*rate).toFixed(2);return{sellerCommission:0,instructorEarning:earn,schoolCut:isARS?amt:+(amt-earn).toFixed(2),instructorHours:hrs,instructorHourlyRate:rate};}
   const comm=+(amt*((seller?.commissionPct||10)/100)).toFixed(2),rate=+(instructor?.hourlyRate||15),earn=+(hrs*rate).toFixed(2);
-  return{sellerCommission:comm,instructorEarning:earn,schoolCut:+(amt-comm-earn).toFixed(2),instructorHours:hrs,instructorHourlyRate:rate};
+  return{sellerCommission:comm,instructorEarning:earn,schoolCut:isARS?+(amt-comm).toFixed(2):+(amt-comm-earn).toFixed(2),instructorHours:hrs,instructorHourlyRate:rate};
 }
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
@@ -891,7 +891,7 @@ function AdminApp() {
       const isOwner = ownId ? !!freshMap[ownId]?.is_owner : false;
       const schoolCutPct = isOwner ? 0 : (instructor?.schoolCutPct ?? config.schoolCutPct ?? 10);
       const hours = c.instructorHours || 0;
-      const earnings = calcEarnings(c.amount, scenario, seller, instructor, schoolCutPct, hours);
+      const earnings = calcEarnings(c.amount, scenario, seller, instructor, schoolCutPct, hours, c.currency||"USD");
       const { error } = await supabase.from("classes").update({
         scenario,
         seller_commission:      earnings.sellerCommission,
@@ -1009,7 +1009,7 @@ function AdminApp() {
     const xACobrar=xUsdClasses.reduce((a,c)=>{if(c.scenario==="own_class")return a;return a+(c.amount-c.paidAmount);},0);
     const xTotalFacturado=xUsdClasses.reduce((a,c)=>a+c.amount,0);
     const xTotalComisiones=xUsdClasses.reduce((a,c)=>c.scenario==="own_class"?a:a+(c.sellerCommission||0),0);
-    const xHonorariosAPagar=xClasses.reduce((a,c)=>a+(c.instructorEarning||0),0);
+    const xHonorariosAPagar=xClasses.reduce((a,c)=>{if(c.currency==="ARS"&&staff.find(s=>s.id===c.instructorId)?.isOwner)return a;return a+(c.instructorEarning||0);},0);
     const xAportesStaff=xUsdClasses.reduce((a,c)=>c.scenario==="own_class"&&c.schoolCut>0?a+c.schoolCut:a,0);
     const xTotalInstructores=xHonorariosAPagar-xAportesStaff;
     const xTotalGastos=xExpenses.reduce((a,e)=>a+e.amount,0);
@@ -1121,8 +1121,11 @@ function calcPendingPast(classes, staffId){
   return classes.filter(c=>c.classDone&&isPendingFor(c,staffId))
     .reduce((a,c)=>{
       const isInstr=c.instructorId===staffId&&(c.scenario==="instructor_only"||c.scenario==="seller_and_instructor");
-      if(isInstr) return a+(c.instructorEarning||0); // honorario siempre USD
-      if(c.currency==="ARS") return a; // comisión vendedor en ARS: excluida del total USD
+      if(isInstr){
+        if(c.currency==="ARS"&&!c.instructorHourlyRate) return a;
+        return a+(c.instructorEarning||0);
+      }
+      if(c.currency==="ARS") return a;
       return a+(c.sellerCommission||0);
     },0);
 }
@@ -1284,7 +1287,7 @@ function ClassesPage({classes,staff,clients,onEdit,onNew,onClientClick,onFinance
   function ClassRow({c,indent=false}){
     const seller=staff.find(s=>s.id===c.sellerId);
     const instr=staff.find(s=>s.id===c.instructorId);
-    const staffE=(c.sellerCommission||0)+(c.instructorEarning||0);
+    const staffE=c.currency==="ARS"?null:(c.sellerCommission||0)+(c.instructorEarning||0);
     const isNonOwnerOwn=c.scenario==="own_class"&&c.schoolCut>0;
     const lb=isNonOwnerOwn?T.muted:c.paymentStatus==="reserved"?T.gold:c.paymentStatus==="partial"?T.orange:T.green;
     return(
@@ -1296,7 +1299,15 @@ function ClassesPage({classes,staff,clients,onEdit,onNew,onClientClick,onFinance
         <TD>{isNonOwnerOwn?<Badge text="Propia" color={T.muted} small/>:<PayBadge status={c.paymentStatus}/>}</TD>
         <TD style={{fontSize:12}}>{seller?<div style={{display:"flex",alignItems:"center",gap:6}}><Av name={seller.name} size={22} color={T.cyan}/>{seller.name}</div>:<span style={{color:T.muted}}>—</span>}</TD>
         <TD>{instr?<div><div style={{display:"flex",alignItems:"center",gap:6,fontSize:12}}><Av name={instr.name} size={22} color={T.purple}/>{instr.name}</div><InstrBadge status={c.instructorStatus}/></div>:<InstrBadge status="unassigned"/>}</TD>
-        <TD style={{fontFamily:"monospace",color:T.accent,fontWeight:700}}>{fmt(staffE)}</TD>
+        <TD style={{fontFamily:"monospace",fontWeight:700}}>
+          {c.currency==="ARS"
+            ?<div style={{display:"flex",flexDirection:"column",gap:1}}>
+                {(c.sellerCommission||0)>0&&<span style={{color:T.purple}}>${Number(c.sellerCommission).toLocaleString("es-AR",{maximumFractionDigits:0})} ARS</span>}
+                {(c.instructorEarning||0)>0&&<span style={{color:T.accent}}>{fmt(c.instructorEarning)}</span>}
+                {!(c.sellerCommission||0)&&!(c.instructorEarning||0)&&<span style={{color:T.muted}}>—</span>}
+              </div>
+            :<span style={{color:T.accent}}>{fmt(staffE)}</span>}
+        </TD>
         <TD style={{fontSize:11,color:T.textDim,whiteSpace:"nowrap"}}>{c.createdAt?fmtDate(c.createdAt):"—"}</TD>
         <TD><Badge text={c.isSettled?"LIQ.":"PEND."} color={c.isSettled?T.muted:T.gold} small dot={!c.isSettled}/></TD>
         <TD><div style={{display:"flex",gap:6}}>{onEdit&&<Btn variant="ghost" size="sm" onClick={()=>onEdit(c)}>✎</Btn>}{onDelete&&<Btn variant="danger" size="sm" onClick={()=>{if(window.confirm("¿Eliminar esta clase?"))onDelete(c.id)}}>✕</Btn>}</div></TD>
@@ -1548,11 +1559,22 @@ function StaffPage({staff,getBalance,settlements,clients,classes,extraCommission
     const myClasses=classes.filter(c=>c.sellerId===viewStaff.id||c.instructorId===viewStaff.id).sort((a,b)=>b.classDate?.localeCompare(a.classDate));
     const pendingPast=myClasses.filter(c=>c.classDone&&isPendingFor(c,viewStaff.id)).reduce((a,c)=>{
       const isInstr=c.instructorId===viewStaff.id&&(c.scenario==="instructor_only"||c.scenario==="seller_and_instructor");
-      if(isInstr) return a+(c.instructorEarning||0);
+      if(isInstr){
+        if(c.currency==="ARS"&&!c.instructorHourlyRate) return a;
+        return a+(c.instructorEarning||0);
+      }
       if(c.currency==="ARS") return a;
       return a+(c.sellerCommission||0);
     },0);
-    const pendingARS=myClasses.filter(c=>c.classDone&&isPendingFor(c,viewStaff.id)&&c.currency==="ARS"&&c.sellerId===viewStaff.id).reduce((a,c)=>a+(c.sellerCommission||0),0);
+    const pendingARS=myClasses.filter(c=>c.classDone&&isPendingFor(c,viewStaff.id)&&c.currency==="ARS").reduce((a,c)=>{
+      const isInstr=c.instructorId===viewStaff.id&&(c.scenario==="instructor_only"||c.scenario==="seller_and_instructor");
+      if(isInstr){
+        if(c.instructorHourlyRate) return a;
+        return a+(c.instructorEarning||0);
+      }
+      if(c.sellerId===viewStaff.id&&!viewStaff.isOwner) return a+(c.sellerCommission||0);
+      return a;
+    },0);
     const mySettlements=settlements.filter(s=>s.staffId===viewStaff.id);
     const myClients=clients.filter(c=>c.sellerId===viewStaff.id);
     const clasesPropias=myClasses.filter(c=>c.scenario==="own_class").length;
@@ -1892,7 +1914,7 @@ function FinanzasPage({classes,expenses,staff,config,conversions,onAddExpense,on
     if(c.scenario==="own_class") return a;
     return a+(c.sellerCommission||0);
   },0);
-  const honorariosAPagar=filteredClasses.reduce((a,c)=>a+(c.instructorEarning||0),0)+estimatedInstrCost;
+  const honorariosAPagar=filteredClasses.reduce((a,c)=>{if(c.currency==="ARS"&&staff.find(s=>s.id===c.instructorId)?.isOwner)return a;return a+(c.instructorEarning||0);},0)+estimatedInstrCost;
   const aportesStaff=usdClasses.reduce((a,c)=>c.scenario==="own_class"&&c.schoolCut>0?a+c.schoolCut:a,0);
   const totalInstructores=honorariosAPagar-aportesStaff;
   // ARS
