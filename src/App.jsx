@@ -1257,8 +1257,8 @@ function ClassesPage({classes,staff,clients,onEdit,onNew,onClientClick,onFinance
     return {groupMap:gm,ungrouped:ug};
   },[sorted]);
 
-  const totalM=filtered.reduce((a,c)=>c.scenario==="own_class"&&c.schoolCut>0||c.currency==="ARS"?a:a+c.amount,0);
-  const totalC=filtered.reduce((a,c)=>c.scenario==="own_class"&&c.schoolCut>0||c.currency==="ARS"?a:a+c.paidAmount,0);
+  const totalM=filtered.reduce((a,c)=>c.scenario==="own_class"||c.currency==="ARS"?a:a+c.amount,0);
+  const totalC=filtered.reduce((a,c)=>c.scenario==="own_class"||c.currency==="ARS"?a:a+c.paidAmount,0);
   const arsCount=filtered.filter(c=>c.currency==="ARS").length;
 
   function toggleSelect(id){setSelected(s=>{const n=new Set(s);n.has(id)?n.delete(id):n.add(id);return n;});}
@@ -1290,9 +1290,9 @@ function ClassesPage({classes,staff,clients,onEdit,onNew,onClientClick,onFinance
     return(
       <tr style={{borderLeft:`3px solid ${lb}40`,background:indent?`${T.surface}80`:undefined}}>
         <TD style={{fontSize:12,color:T.textDim,whiteSpace:"nowrap",paddingLeft:indent?28:undefined}}>{fmtDate(c.classDate)}</TD>
-        <TD><Badge text={c.classTypeName||"—"} color={T.muted} small/><Badge text={c.discipline==="snowboard"?"🏂 Snowboard":"🎿 Esquí"} color={c.discipline==="snowboard"?T.purple:T.cyan} small/></TD>
+        <TD><Badge text={c.classTypeName||"—"} color={T.muted} small/><Badge text={c.discipline==="snowboard"?"🏂 Snowboard":"🎿 Esquí"} color={c.discipline==="snowboard"?T.purple:T.cyan} small/>{c.currency==="ARS"&&<Badge text="ARS" color={T.purple} small/>}</TD>
         <TD><button onClick={()=>onClientClick(c.clientId,c.clientName)} style={{background:"none",border:"none",color:T.accent,fontWeight:700,fontSize:13,cursor:"pointer",padding:0,fontFamily:"inherit",textDecoration:"underline"}}>{c.clientName}</button>{c.notes&&<div style={{fontSize:11,color:T.textDim,maxWidth:140,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.notes}</div>}</TD>
-        <TD><div style={{fontFamily:"monospace",fontWeight:800}}>{fmt(c.amount)}</div><button onClick={()=>onFinanceClick(c)} style={{background:"none",border:"none",color:PAY_STATUS[c.paymentStatus]?.color,fontSize:11,cursor:"pointer",padding:0,fontFamily:"monospace",fontWeight:600,textDecoration:"underline"}}>{fmt(c.paidAmount)} ▸</button><PayBar amount={c.amount} paidAmount={c.paidAmount}/></TD>
+        <TD><div style={{fontFamily:"monospace",fontWeight:800}}>{c.currency==="ARS"?<span style={{color:T.purple}}>${Number(c.amount||0).toLocaleString("es-AR",{maximumFractionDigits:0})} ARS</span>:fmt(c.amount)}</div><button onClick={()=>onFinanceClick(c)} style={{background:"none",border:"none",color:PAY_STATUS[c.paymentStatus]?.color,fontSize:11,cursor:"pointer",padding:0,fontFamily:"monospace",fontWeight:600,textDecoration:"underline"}}>{c.currency==="ARS"?`$${Number(c.paidAmount||0).toLocaleString("es-AR",{maximumFractionDigits:0})} ARS`:fmt(c.paidAmount)} ▸</button><PayBar amount={c.amount} paidAmount={c.paidAmount}/></TD>
         <TD>{isNonOwnerOwn?<Badge text="Propia" color={T.muted} small/>:<PayBadge status={c.paymentStatus}/>}</TD>
         <TD style={{fontSize:12}}>{seller?<div style={{display:"flex",alignItems:"center",gap:6}}><Av name={seller.name} size={22} color={T.cyan}/>{seller.name}</div>:<span style={{color:T.muted}}>—</span>}</TD>
         <TD>{instr?<div><div style={{display:"flex",alignItems:"center",gap:6,fontSize:12}}><Av name={instr.name} size={22} color={T.purple}/>{instr.name}</div><InstrBadge status={c.instructorStatus}/></div>:<InstrBadge status="unassigned"/>}</TD>
@@ -1402,9 +1402,9 @@ function ClassesPage({classes,staff,clients,onEdit,onNew,onClientClick,onFinance
                   {onGroupClasses&&<input type="checkbox" checked={selected.has(c.id)} onChange={()=>toggleSelect(c.id)} style={{marginRight:6,accentColor:T.accent,cursor:"pointer"}} onClick={e=>e.stopPropagation()}/>}
                   {fmtDate(c.classDate)}
                 </TD>
-                <TD><Badge text={c.classTypeName||"—"} color={T.muted} small/><Badge text={c.discipline==="snowboard"?"🏂 Snowboard":"🎿 Esquí"} color={c.discipline==="snowboard"?T.purple:T.cyan} small/></TD>
+                <TD><Badge text={c.classTypeName||"—"} color={T.muted} small/><Badge text={c.discipline==="snowboard"?"🏂 Snowboard":"🎿 Esquí"} color={c.discipline==="snowboard"?T.purple:T.cyan} small/>{c.currency==="ARS"&&<Badge text="ARS" color={T.purple} small/>}</TD>
                 <TD><button onClick={()=>onClientClick(c.clientId,c.clientName)} style={{background:"none",border:"none",color:T.accent,fontWeight:700,fontSize:13,cursor:"pointer",padding:0,fontFamily:"inherit",textDecoration:"underline"}}>{c.clientName}</button>{c.notes&&<div style={{fontSize:11,color:T.textDim,maxWidth:140,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.notes}</div>}</TD>
-                <TD><div style={{fontFamily:"monospace",fontWeight:800}}>{fmt(c.amount)}</div><button onClick={()=>onFinanceClick(c)} style={{background:"none",border:"none",color:PAY_STATUS[c.paymentStatus]?.color,fontSize:11,cursor:"pointer",padding:0,fontFamily:"monospace",fontWeight:600,textDecoration:"underline"}}>{fmt(c.paidAmount)} ▸</button><PayBar amount={c.amount} paidAmount={c.paidAmount}/></TD>
+                <TD><div style={{fontFamily:"monospace",fontWeight:800}}>{c.currency==="ARS"?<span style={{color:T.purple}}>${Number(c.amount||0).toLocaleString("es-AR",{maximumFractionDigits:0})} ARS</span>:fmt(c.amount)}</div><button onClick={()=>onFinanceClick(c)} style={{background:"none",border:"none",color:PAY_STATUS[c.paymentStatus]?.color,fontSize:11,cursor:"pointer",padding:0,fontFamily:"monospace",fontWeight:600,textDecoration:"underline"}}>{c.currency==="ARS"?`$${Number(c.paidAmount||0).toLocaleString("es-AR",{maximumFractionDigits:0})} ARS`:fmt(c.paidAmount)} ▸</button><PayBar amount={c.amount} paidAmount={c.paidAmount}/></TD>
                 <TD><PayBadge status={c.paymentStatus}/></TD>
                 <TD style={{fontSize:12}}>{staff.find(s=>s.id===c.sellerId)?<div style={{display:"flex",alignItems:"center",gap:6}}><Av name={staff.find(s=>s.id===c.sellerId).name} size={22} color={T.cyan}/>{staff.find(s=>s.id===c.sellerId).name}</div>:<span style={{color:T.muted}}>—</span>}</TD>
                 <TD>{staff.find(s=>s.id===c.instructorId)?<div><div style={{display:"flex",alignItems:"center",gap:6,fontSize:12}}><Av name={staff.find(s=>s.id===c.instructorId).name} size={22} color={T.purple}/>{staff.find(s=>s.id===c.instructorId).name}</div><InstrBadge status={c.instructorStatus}/></div>:<InstrBadge status="unassigned"/>}</TD>
@@ -1581,8 +1581,8 @@ function StaffPage({staff,getBalance,settlements,clients,classes,extraCommission
 <Btn variant="gold" size="sm" disabled={pendingPast===0&&pendingARS===0} onClick={()=>onSettle(viewStaff)}>✓ Liquidar</Btn>
             </div>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:`repeat(${isSeller?4:3},1fr)`,gap:10,marginBottom:16}}>
-            {(()=>{const totalLiqUSD=mySettlements.reduce((a,s)=>a+s.totalEarned,0);const totalLiqARS=mySettlements.reduce((a,s)=>a+calcArsSettled(classes,s.periodStart,s.periodEnd,viewStaff.id),0);const liqSub=totalLiqARS>0?`+$${totalLiqARS.toLocaleString("es-AR")} ARS`:null;return[["A Pagar",fmt(pendingPast),T.gold,pendingARS>0?`+$${pendingARS.toLocaleString("es-AR")} ARS pend.`:null],["Liquidado",fmt(totalLiqUSD),T.green,liqSub],["Clases",myClasses.length,T.text,`${clasesPropias} prop. · ${clasesAsignadas} asig.`],...(isSeller?[["Clientes",myClients.length,T.cyan,null]]:[])];})().map(([l,v,c,s])=>(
+          <div style={{display:"grid",gridTemplateColumns:`repeat(auto-fill,minmax(140px,1fr))`,gap:10,marginBottom:16}}>
+            {(()=>{const totalLiqUSD=mySettlements.reduce((a,s)=>a+s.totalEarned,0);const totalLiqARS=mySettlements.reduce((a,s)=>a+calcArsSettled(classes,s.periodStart,s.periodEnd,viewStaff.id),0);const liqSub=totalLiqARS>0?`+$${totalLiqARS.toLocaleString("es-AR")} ARS`:null;const aCobrarProp=myClasses.filter(c=>c.scenario==="own_class"&&c.currency!=="ARS").reduce((a,c)=>a+(c.amount-c.paidAmount),0);const aCobrarPropARS=myClasses.filter(c=>c.scenario==="own_class"&&c.currency==="ARS").reduce((a,c)=>a+(c.amount-c.paidAmount),0);const aCobrarSub=aCobrarPropARS>0?`+$${aCobrarPropARS.toLocaleString("es-AR")} ARS`:null;return[["A Pagar",fmt(pendingPast),T.gold,pendingARS>0?`+$${pendingARS.toLocaleString("es-AR")} ARS pend.`:null],["Liquidado",fmt(totalLiqUSD),T.green,liqSub],["Clases",myClasses.length,T.text,`${clasesPropias} prop. · ${clasesAsignadas} asig.`],...(clasesPropias>0?[["A cobrar",fmt(aCobrarProp),T.orange,aCobrarSub]]:[]),(isSeller?[["Clientes",myClients.length,T.cyan,null]]:[])].flat();})().map(([l,v,c,s])=>(
               <div key={l} style={{background:T.surface,borderRadius:10,padding:"12px 14px",textAlign:"center"}}>
                 <div style={{fontSize:10,color:T.textDim,textTransform:"uppercase"}}>{l}</div>
                 <div style={{fontSize:20,fontWeight:900,color:c,fontFamily:"monospace",marginTop:4}}>{v}</div>
