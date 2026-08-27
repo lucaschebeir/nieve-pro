@@ -698,11 +698,16 @@ function ModalSettle({name,staffId,classes,extraCommissions,onConfirm,onClose}){
   ,[classes,staffId,start,end]);
   const toSettleWithEarn=useMemo(()=>toSettle.filter(c=>{
     const isInstr=c.instructorId===staffId&&(c.scenario==="instructor_only"||c.scenario==="seller_and_instructor");
-    return isInstr||c.currency!=="ARS"; // excluir clases ARS donde el staff es solo vendedor
+    return isInstr||c.currency!=="ARS";
   }).map(c=>{
     const earn=(c.instructorId===staffId&&(c.scenario==="instructor_only"||c.scenario==="seller_and_instructor"))?c.instructorEarning:c.sellerCommission;
     return {...c,earn:earn||0};
   }),[toSettle,staffId]);
+  const arsToSettle=useMemo(()=>toSettle.filter(c=>{
+    const isInstr=c.instructorId===staffId&&(c.scenario==="instructor_only"||c.scenario==="seller_and_instructor");
+    return !isInstr&&c.currency==="ARS";
+  }),[toSettle,staffId]);
+  const arsSettleAmount=arsToSettle.reduce((a,c)=>a+(c.sellerCommission||0),0);
   const extrasToSettle=useMemo(()=>
     (extraCommissions||[]).filter(e=>e.staffId===staffId&&!e.isSettled&&e.date>=start&&e.date<=end)
       .sort((a,b)=>a.date.localeCompare(b.date))
@@ -718,8 +723,9 @@ function ModalSettle({name,staffId,classes,extraCommissions,onConfirm,onClose}){
   return(
     <Modal title={`Liquidar — ${name}`} onClose={onClose} width={480}>
       <div style={{background:`${T.gold}10`,border:`1px solid ${T.gold}30`,borderRadius:10,padding:16,textAlign:"center",marginBottom:16}}>
-        <div style={{fontSize:10,color:T.textDim,textTransform:"uppercase"}}>Total a liquidar</div>
+        <div style={{fontSize:10,color:T.textDim,textTransform:"uppercase"}}>Total a liquidar (USD)</div>
         <div style={{fontSize:32,fontWeight:900,color:T.gold,fontFamily:"monospace"}}>{fmt(settleAmount)}</div>
+        {arsSettleAmount>0&&<div style={{fontSize:14,fontWeight:700,color:T.purple,fontFamily:"monospace",marginTop:4}}>+${arsSettleAmount.toLocaleString("es-AR")} ARS</div>}
         <button onClick={()=>setShowDetail(p=>!p)} style={{background:"none",border:"none",color:T.accent,fontSize:12,cursor:"pointer",marginTop:4,fontFamily:"inherit"}}>
           {toSettle.length} clase(s){extrasToSettle.length>0?` · ${extrasToSettle.length} comisión(es)`:""} {showDetail?"▲ ocultar":"▼ ver desglose"}
         </button>
@@ -734,6 +740,15 @@ function ModalSettle({name,staffId,classes,extraCommissions,onConfirm,onClose}){
                 <span style={{color:T.textDim}}>{fmtDate(c.classDate)} · {c.classTypeName}</span>
               </div>
               <span style={{fontFamily:"monospace",color:T.gold,fontWeight:700}}>{fmt(c.earn)}</span>
+            </div>
+          ))}
+          {arsToSettle.map((c,i)=>(
+            <div key={c.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 12px",borderBottom:`1px solid ${T.border}`,background:i%2===0?`${T.purple}08`:"none"}}>
+              <div style={{display:"flex",flexDirection:"column",gap:1}}>
+                <span style={{color:T.text,fontWeight:600}}>{c.clientName}</span>
+                <span style={{color:T.textDim}}>{fmtDate(c.classDate)} · {c.classTypeName} · <span style={{color:T.purple}}>ARS</span></span>
+              </div>
+              <span style={{fontFamily:"monospace",color:T.purple,fontWeight:700}}>${(c.sellerCommission||0).toLocaleString("es-AR")} ARS</span>
             </div>
           ))}
           {extrasToSettle.map((e,i)=>(
@@ -1090,9 +1105,15 @@ function AdminApp() {
 // Estas páginas son idénticas a las del simulador NieveProApp_v2.jsx
 // Solo cambia que reciben datos reales en lugar de mock
 
-function calcArsSettled(classes, settlementId, staffId){
+function calcArsSettled(classes, periodStart, periodEnd, staffId){
   return classes
-    .filter(c=>c.settlementId===settlementId&&c.currency==="ARS"&&c.sellerId===staffId)
+    .filter(c=>
+      c.sellerId===staffId&&
+      c.currency==="ARS"&&
+      c.classDate>=periodStart&&
+      c.classDate<=periodEnd&&
+      !isPendingFor(c,staffId)
+    )
     .reduce((a,c)=>a+(c.sellerCommission||0),0);
 }
 
@@ -1141,7 +1162,7 @@ function DashboardPage({staff,classes,settlements,clients,getBalance,onSettle,on
           const pending=pendingMap[s.id]||0;
           const staffSettlements=settlements.filter(st=>st.staffId===s.id);
           const hist=staffSettlements.reduce((a,h)=>a+h.totalEarned,0);
-          const histARS=staffSettlements.reduce((a,h)=>a+calcArsSettled(classes,h.id,s.id),0);
+          const histARS=staffSettlements.reduce((a,h)=>a+calcArsSettled(classes,h.periodStart,h.periodEnd,s.id),0);
           const rc=ROLE_COLORS[s.role];
           return(
             <Card key={s.id} style={{opacity:s.isActive?1:.5}}>
@@ -1179,7 +1200,7 @@ function DashboardPage({staff,classes,settlements,clients,getBalance,onSettle,on
           <tbody>
             {settlements.slice().reverse().slice(0,10).map(st=>{
               const s=staff.find(x=>x.id===st.staffId);
-              const arsS=calcArsSettled(classes,st.id,st.staffId);
+              const arsS=calcArsSettled(classes,st.periodStart,st.periodEnd,st.staffId);
               return(<tr key={st.id}><TD><div style={{display:"flex",alignItems:"center",gap:8}}><Av name={s?.name||"?"} size={26} color={ROLE_COLORS[s?.role]}/><span style={{fontWeight:600,fontSize:13}}>{s?.name}</span></div></TD><TD style={{color:T.textDim,fontSize:12}}>{fmtDate(st.periodStart)} – {fmtDate(st.periodEnd)}</TD><TD style={{fontFamily:"monospace"}}>{st.totalClasses}</TD><TD><div style={{fontFamily:"monospace",color:T.green,fontWeight:700}}>{fmt(st.totalEarned)}</div>{arsS>0&&<div style={{fontFamily:"monospace",color:T.purple,fontSize:11}}>+${arsS.toLocaleString("es-AR")} ARS</div>}</TD><TD style={{fontSize:12}}>{st.method}</TD><TD style={{fontSize:12,color:T.textDim}}>{fmtDate(st.settledAt)}</TD></tr>);
             })}
             {settlements.length===0&&<tr><td colSpan={6}><Empty text="Sin liquidaciones"/></td></tr>}
@@ -1531,6 +1552,7 @@ function StaffPage({staff,getBalance,settlements,clients,classes,extraCommission
       if(c.currency==="ARS") return a;
       return a+(c.sellerCommission||0);
     },0);
+    const pendingARS=myClasses.filter(c=>c.classDone&&isPendingFor(c,viewStaff.id)&&c.currency==="ARS"&&c.sellerId===viewStaff.id).reduce((a,c)=>a+(c.sellerCommission||0),0);
     const mySettlements=settlements.filter(s=>s.staffId===viewStaff.id);
     const myClients=clients.filter(c=>c.sellerId===viewStaff.id);
     const clasesPropias=myClasses.filter(c=>c.scenario==="own_class").length;
@@ -1556,11 +1578,11 @@ function StaffPage({staff,getBalance,settlements,clients,classes,extraCommission
               <Toggle value={viewStaff.isActive} onChange={()=>onToggle(viewStaff.id)}/>
               <Btn variant="ghost" size="sm" onClick={()=>onEdit(viewStaff)}>✎ Editar</Btn>
 <Btn variant="teal" size="sm" onClick={()=>onAddExtra(viewStaff)}>＋ Comisión</Btn>
-<Btn variant="gold" size="sm" disabled={pendingPast===0} onClick={()=>onSettle(viewStaff)}>✓ Liquidar</Btn>
+<Btn variant="gold" size="sm" disabled={pendingPast===0&&pendingARS===0} onClick={()=>onSettle(viewStaff)}>✓ Liquidar</Btn>
             </div>
           </div>
           <div style={{display:"grid",gridTemplateColumns:`repeat(${isSeller?4:3},1fr)`,gap:10,marginBottom:16}}>
-            {(()=>{const totalLiqUSD=mySettlements.reduce((a,s)=>a+s.totalEarned,0);const totalLiqARS=mySettlements.reduce((a,s)=>a+calcArsSettled(classes,s.id,viewStaff.id),0);const liqSub=totalLiqARS>0?`+$${totalLiqARS.toLocaleString("es-AR")} ARS`:null;return[["A Pagar",fmt(pendingPast),T.gold,null],["Liquidado",fmt(totalLiqUSD),T.green,liqSub],["Clases",myClasses.length,T.text,`${clasesPropias} prop. · ${clasesAsignadas} asig.`],...(isSeller?[["Clientes",myClients.length,T.cyan,null]]:[])];})().map(([l,v,c,s])=>(
+            {(()=>{const totalLiqUSD=mySettlements.reduce((a,s)=>a+s.totalEarned,0);const totalLiqARS=mySettlements.reduce((a,s)=>a+calcArsSettled(classes,s.periodStart,s.periodEnd,viewStaff.id),0);const liqSub=totalLiqARS>0?`+$${totalLiqARS.toLocaleString("es-AR")} ARS`:null;return[["A Pagar",fmt(pendingPast),T.gold,pendingARS>0?`+$${pendingARS.toLocaleString("es-AR")} ARS pend.`:null],["Liquidado",fmt(totalLiqUSD),T.green,liqSub],["Clases",myClasses.length,T.text,`${clasesPropias} prop. · ${clasesAsignadas} asig.`],...(isSeller?[["Clientes",myClients.length,T.cyan,null]]:[])];})().map(([l,v,c,s])=>(
               <div key={l} style={{background:T.surface,borderRadius:10,padding:"12px 14px",textAlign:"center"}}>
                 <div style={{fontSize:10,color:T.textDim,textTransform:"uppercase"}}>{l}</div>
                 <div style={{fontSize:20,fontWeight:900,color:c,fontFamily:"monospace",marginTop:4}}>{v}</div>
@@ -1604,8 +1626,8 @@ function StaffPage({staff,getBalance,settlements,clients,classes,extraCommission
     {myClasses.filter(c=>isPendingFor(c,viewStaff.id)).length===0&&extraCommissions.filter(e=>e.staffId===viewStaff.id&&!e.isSettled).length===0&&<Empty text="Sin pendientes"/>}
   </div>
 )}
-            {staffTab==="history"&&(()=>{const settled=myClasses.filter(c=>!isPendingFor(c,viewStaff.id)&&(!histFrom||c.classDate>=histFrom)&&(!histTo||c.classDate<=histTo));return(<div style={{display:"flex",flexDirection:"column",gap:8}}><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}><Inp label="Desde" type="date" value={histFrom} onChange={setHistFrom}/><Inp label="Hasta" type="date" value={histTo} onChange={setHistTo}/></div>{settled.length===0?<Empty text="Sin historial"/>:<div style={{display:"flex",flexDirection:"column",gap:5}}>{settled.map(c=>{const earn=(c.instructorId===viewStaff.id&&(c.scenario==="instructor_only"||c.scenario==="seller_and_instructor"))?c.instructorEarning:c.sellerCommission;return(<div key={c.id} style={{background:T.surface,borderRadius:8,padding:"10px 14px",fontSize:12,borderLeft:`3px solid ${T.muted}`}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}><span style={{color:T.textDim}}>{fmtDate(c.classDate)}</span><span style={{fontWeight:700,flex:1,paddingLeft:8}}>{c.clientName}</span><PayBadge status={c.paymentStatus}/><span style={{fontFamily:"monospace",color:T.green,fontWeight:700}}>→ {fmt(earn)}</span></div>{c.classTypeName&&<div style={{color:T.muted,fontSize:11,marginTop:3}}>{c.classTypeName}</div>}{c.notes&&<div style={{color:T.muted,fontSize:11,marginTop:2}}>{c.notes}</div>}</div>);})}</div>}</div>);})()}
-            {staffTab==="settlements"&&(mySettlements.length===0?<Empty text="Sin liquidaciones"/>:<div style={{display:"flex",flexDirection:"column",gap:5}}>{mySettlements.map(s=>{const arsS=calcArsSettled(classes,s.id,viewStaff.id);return(<div key={s.id} style={{background:T.surface,borderRadius:8,padding:"10px 14px",fontSize:12}}><div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}><span style={{color:T.textDim,whiteSpace:"nowrap"}}>{fmtDate(s.settledAt)}</span><span style={{flex:1}}>{fmtDate(s.periodStart)} → {fmtDate(s.periodEnd)}</span><span style={{fontFamily:"monospace",color:T.green,fontWeight:700}}>{fmt(s.totalEarned)}</span>{arsS>0&&<span style={{fontFamily:"monospace",color:T.purple,fontWeight:700,fontSize:11}}>+${arsS.toLocaleString("es-AR")} ARS</span>}<Badge text={s.method} color={T.accent} small/></div>{s.notes&&<div style={{color:T.muted,fontSize:11,marginTop:4}}>{s.notes}</div>}</div>);})}</div>)}
+            {staffTab==="history"&&(()=>{const settled=myClasses.filter(c=>!isPendingFor(c,viewStaff.id)&&(!histFrom||c.classDate>=histFrom)&&(!histTo||c.classDate<=histTo));return(<div style={{display:"flex",flexDirection:"column",gap:8}}><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}><Inp label="Desde" type="date" value={histFrom} onChange={setHistFrom}/><Inp label="Hasta" type="date" value={histTo} onChange={setHistTo}/></div>{settled.length===0?<Empty text="Sin historial"/>:<div style={{display:"flex",flexDirection:"column",gap:5}}>{settled.map(c=>{const isInstrH=c.instructorId===viewStaff.id&&(c.scenario==="instructor_only"||c.scenario==="seller_and_instructor");const isARSH=c.currency==="ARS";const earnH=isInstrH?c.instructorEarning:(isARSH?null:c.sellerCommission);return(<div key={c.id} style={{background:T.surface,borderRadius:8,padding:"10px 14px",fontSize:12,borderLeft:`3px solid ${T.muted}`}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}><span style={{color:T.textDim}}>{fmtDate(c.classDate)}</span><span style={{fontWeight:700,flex:1,paddingLeft:8}}>{c.clientName}</span><PayBadge status={c.paymentStatus}/>{isARSH&&!isInstrH?<span style={{fontFamily:"monospace",color:T.purple,fontWeight:700}}>→ ${(c.sellerCommission||0).toLocaleString("es-AR")} ARS</span>:<span style={{fontFamily:"monospace",color:T.green,fontWeight:700}}>→ {fmt(earnH)}</span>}</div>{c.classTypeName&&<div style={{color:T.muted,fontSize:11,marginTop:3}}>{c.classTypeName}</div>}{c.notes&&<div style={{color:T.muted,fontSize:11,marginTop:2}}>{c.notes}</div>}</div>);})}</div>}</div>);})()}
+            {staffTab==="settlements"&&(mySettlements.length===0?<Empty text="Sin liquidaciones"/>:<div style={{display:"flex",flexDirection:"column",gap:5}}>{mySettlements.map(s=>{const arsS=calcArsSettled(classes,s.periodStart,s.periodEnd,viewStaff.id);return(<div key={s.id} style={{background:T.surface,borderRadius:8,padding:"10px 14px",fontSize:12}}><div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}><span style={{color:T.textDim,whiteSpace:"nowrap"}}>{fmtDate(s.settledAt)}</span><span style={{flex:1}}>{fmtDate(s.periodStart)} → {fmtDate(s.periodEnd)}</span><span style={{fontFamily:"monospace",color:T.green,fontWeight:700}}>{fmt(s.totalEarned)}</span>{arsS>0&&<span style={{fontFamily:"monospace",color:T.purple,fontWeight:700,fontSize:11}}>+${arsS.toLocaleString("es-AR")} ARS</span>}<Badge text={s.method} color={T.accent} small/></div>{s.notes&&<div style={{color:T.muted,fontSize:11,marginTop:4}}>{s.notes}</div>}</div>);})}</div>)}
             {staffTab==="clients"&&!selClient&&(myClients.length===0?<Empty text="Sin clientes"/>:myClients.map(cl=>{const cls=classes.filter(c=>c.clientId===cl.id||c.clientName?.toLowerCase()===cl.name?.toLowerCase());return(<div key={cl.id} onClick={()=>setSelClient(cl)} style={{background:T.surface,borderRadius:8,padding:"10px 14px",cursor:"pointer",borderLeft:`3px solid ${T.cyan}`,display:"flex",gap:12,alignItems:"center"}} onMouseEnter={e=>e.currentTarget.style.background=T.cardHover} onMouseLeave={e=>e.currentTarget.style.background=T.surface}><Av name={cl.name} size={34} color={T.accent}/><div style={{flex:1}}><div style={{fontWeight:700}}>{cl.name}</div>{cl.phone&&<div style={{fontSize:11,color:T.textDim}}>📞 {cl.phone}</div>}</div><div style={{textAlign:"right"}}><div style={{fontFamily:"monospace",color:T.green,fontWeight:700}}>{fmt(cls.reduce((a,c)=>a+c.amount,0))}</div><div style={{fontSize:11,color:T.muted}}>{cls.length} clase(s)</div></div><span style={{color:T.textDim,fontSize:18}}>›</span></div>);})) }
             {staffTab==="clients"&&selClient&&<ClientDetailCard client={selClient} allClasses={classes.filter(c=>c.clientId===selClient.id||c.clientName?.toLowerCase()===selClient.name?.toLowerCase())} staff={staff} onBack={()=>setSelClient(null)} backLabel="← Cartera" isAdmin/>}
           </div>
