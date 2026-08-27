@@ -223,7 +223,7 @@ function ClassFinanceModal({cls,staff,onClose}){
 // ─── CLIENT DETAIL CARD ───────────────────────────────────────────────────────
 function ClientDetailCard({client,allClasses,staff,onBack,backLabel,isAdmin=true}){
   const cls=allClasses.sort((a,b)=>b.classDate?.localeCompare(a.classDate));
-  const total=cls.reduce((a,c)=>a+c.amount,0);
+  const total=cls.filter(c=>c.currency!=="ARS").reduce((a,c)=>a+c.amount,0);
   const seller=staff.find(s=>s.id===client.sellerId);
   const instrMap={};
   cls.forEach(c=>{ if(c.instructorId){ instrMap[c.instructorId]=(instrMap[c.instructorId]||0)+1; } });
@@ -275,7 +275,7 @@ function ClientDetailCard({client,allClasses,staff,onBack,backLabel,isAdmin=true
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
                 <span style={{color:T.textDim}}>{fmtDate(c.classDate)}</span>
                 {instr&&<span style={{color:T.purple,fontSize:11}}>👤 {instr.name}</span>}
-                {isAdmin&&<span style={{fontFamily:"monospace",color:T.cyan,fontWeight:700}}>{fmt(c.amount)}</span>}
+                {isAdmin&&<span style={{fontFamily:"monospace",color:c.currency==="ARS"?T.purple:T.cyan,fontWeight:700}}>{c.currency==="ARS"?`$${Number(c.amount||0).toLocaleString("es-AR",{maximumFractionDigits:0})} ARS`:fmt(c.amount)}</span>}
                 <PayBadge status={c.paymentStatus}/>
               </div>
               {c.notes&&<div style={{color:T.muted,fontSize:11,marginTop:3}}>{c.notes}</div>}
@@ -1364,10 +1364,10 @@ function ClassesPage({classes,staff,clients,onEdit,onNew,onClientClick,onFinance
           <tbody>
             {Object.entries(groupMap).map(([gid,gclasses])=>{
               const expanded=expandedGroups.has(gid);
-              const gTotal=gclasses.filter(c=>!(c.scenario==="own_class"&&c.schoolCut>0)).reduce((a,c)=>a+c.amount,0);
-              const gPaid=gclasses.filter(c=>!(c.scenario==="own_class"&&c.schoolCut>0)).reduce((a,c)=>a+c.paidAmount,0);
+              const gTotal=gclasses.filter(c=>c.scenario!=="own_class"&&c.currency!=="ARS").reduce((a,c)=>a+c.amount,0);
+              const gPaid=gclasses.filter(c=>c.scenario!=="own_class"&&c.currency!=="ARS").reduce((a,c)=>a+c.paidAmount,0);
               const gSaldo=gTotal-gPaid;
-              const billable=gclasses.filter(c=>!(c.scenario==="own_class"&&c.schoolCut>0));
+              const billable=gclasses.filter(c=>c.scenario!=="own_class"&&c.currency!=="ARS");
               const worstStatus=billable.some(c=>c.paymentStatus==="reserved")?"reserved":billable.some(c=>c.paymentStatus==="partial")?"partial":"paid";
               const lb=worstStatus==="reserved"?T.gold:worstStatus==="partial"?T.orange:T.green;
               const client=gclasses[0];
@@ -1474,7 +1474,7 @@ function ClientsPage({clients,staff,classes,selectedClientId,onClearSelected,onE
               <Card key={c.id}>
                 <div style={{display:"flex",gap:12,marginBottom:12}}><Av name={c.name} size={44} color={T.accent}/><div style={{flex:1}}><div style={{fontWeight:800,fontSize:14}}>{c.name}</div>{c.phone&&<div style={{fontSize:12,color:T.textDim,marginTop:2}}>📞 {c.phone}</div>}{c.email&&<div style={{fontSize:12,color:T.textDim}}>✉ {c.email}</div>}</div></div>
                 {c.notes&&<div style={{fontSize:12,color:T.textDim,background:T.surface,borderRadius:6,padding:"6px 10px",marginBottom:12,lineHeight:1.5,maxHeight:50,overflow:"hidden"}}>{c.notes}</div>}
-                <div style={{display:"flex",gap:6,marginBottom:12,flexWrap:"wrap"}}>{seller?<Badge text={seller.name} color={T.cyan}/>:<Badge text="Escuela" color={T.green}/>}<Badge text={`${cls.length} clase(s)`} color={T.purple}/><Badge text={fmt(cls.reduce((a,c)=>a+c.amount,0))} color={T.green}/></div>
+                <div style={{display:"flex",gap:6,marginBottom:12,flexWrap:"wrap"}}>{seller?<Badge text={seller.name} color={T.cyan}/>:<Badge text="Escuela" color={T.green}/>}<Badge text={`${cls.length} clase(s)`} color={T.purple}/><Badge text={fmt(cls.filter(c=>c.currency!=="ARS").reduce((a,c)=>a+c.amount,0))} color={T.green}/></div>
                 <div style={{display:"flex",gap:8}}><Btn variant="ghost" size="sm" onClick={()=>setViewClient(c)} style={{flex:1}}>Ver Ficha</Btn>{onEdit&&<Btn variant="ghost" size="sm" onClick={()=>onEdit(c)}>✎</Btn>}</div>
               </Card>
             );
@@ -1515,7 +1515,7 @@ function ClientsPage({clients,staff,classes,selectedClientId,onClearSelected,onE
                           {c.notes&&<div style={{fontSize:11,color:T.textDim,background:T.surface,borderRadius:5,padding:"4px 8px",marginBottom:8,maxHeight:36,overflow:"hidden"}}>{c.notes}</div>}
                           <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
                             <Badge text={`${cls.length} clase(s)`} color={T.purple} small/>
-                            <Badge text={fmt(cls.reduce((a,c)=>a+c.amount,0))} color={T.green} small/>
+                            <Badge text={fmt(cls.filter(c=>c.currency!=="ARS").reduce((a,c)=>a+c.amount,0))} color={T.green} small/>
                           </div>
                           <div style={{display:"flex",gap:6}}>
                             <Btn variant="ghost" size="sm" onClick={()=>setViewClient(c)} style={{flex:1}}>Ver Ficha</Btn>
@@ -1582,7 +1582,8 @@ function StaffPage({staff,getBalance,settlements,clients,classes,extraCommission
             </div>
           </div>
           <div style={{display:"grid",gridTemplateColumns:`repeat(auto-fill,minmax(140px,1fr))`,gap:10,marginBottom:16}}>
-            {(()=>{const totalLiqUSD=mySettlements.reduce((a,s)=>a+s.totalEarned,0);const totalLiqARS=mySettlements.reduce((a,s)=>a+calcArsSettled(classes,s.periodStart,s.periodEnd,viewStaff.id),0);const liqSub=totalLiqARS>0?`+$${totalLiqARS.toLocaleString("es-AR")} ARS`:null;const aCobrarProp=myClasses.filter(c=>c.scenario==="own_class"&&c.currency!=="ARS").reduce((a,c)=>a+(c.amount-c.paidAmount),0);const aCobrarPropARS=myClasses.filter(c=>c.scenario==="own_class"&&c.currency==="ARS").reduce((a,c)=>a+(c.amount-c.paidAmount),0);const aCobrarSub=aCobrarPropARS>0?`+$${aCobrarPropARS.toLocaleString("es-AR")} ARS`:null;return[["A Pagar",fmt(pendingPast),T.gold,pendingARS>0?`+$${pendingARS.toLocaleString("es-AR")} ARS pend.`:null],["Liquidado",fmt(totalLiqUSD),T.green,liqSub],["Clases",myClasses.length,T.text,`${clasesPropias} prop. · ${clasesAsignadas} asig.`],...(clasesPropias>0?[["A cobrar",fmt(aCobrarProp),T.orange,aCobrarSub]]:[]),(isSeller?[["Clientes",myClients.length,T.cyan,null]]:[])].flat();})().map(([l,v,c,s])=>(
+            {(()=>{const totalLiqUSD=mySettlements.reduce((a,s)=>a+s.totalEarned,0);const totalLiqARS=mySettlements.reduce((a,s)=>a+calcArsSettled(classes,s.periodStart,s.periodEnd,viewStaff.id),0);const liqSub=totalLiqARS>0?`+$${totalLiqARS.toLocaleString("es-AR")} ARS`:null;const aCobrarProp=myClasses.filter(c=>c.scenario==="own_class"&&c.currency!=="ARS").reduce((a,c)=>a+(c.amount-c.paidAmount),0);const aCobrarPropARS=myClasses.filter(c=>c.scenario==="own_class"&&c.currency==="ARS").reduce((a,c)=>a+(c.amount-c.paidAmount),0);const aCobrarSub=aCobrarPropARS>0?`+$${aCobrarPropARS.toLocaleString("es-AR")} ARS`:null;return[["A Pagar",fmt(pendingPast),T.gold,pendingARS>0?`+$${pendingARS.toLocaleString("es-AR")} ARS pend.`:null],["Liquidado",fmt(totalLiqUSD),T.green,liqSub],["Clases",myClasses.length,T.text,`${clasesPropias} prop. · ${clasesAsignadas} asig.`],...(clasesPropias>0?[["A cobrar",fmt(aCobrarProp),T.orange,aCobrarSub]]:[]),...(isSeller?[["Clientes",myClients.length,T.cyan,null]]:[])];
+})().map(([l,v,c,s])=>(
               <div key={l} style={{background:T.surface,borderRadius:10,padding:"12px 14px",textAlign:"center"}}>
                 <div style={{fontSize:10,color:T.textDim,textTransform:"uppercase"}}>{l}</div>
                 <div style={{fontSize:20,fontWeight:900,color:c,fontFamily:"monospace",marginTop:4}}>{v}</div>
@@ -2127,7 +2128,7 @@ function SearchPage({clients,classes,staff,onViewClient}){
                     Vendedor: <strong style={{color:seller?T.cyan:T.green}}>{seller?seller.name:"Escuela"}</strong>
                     {seller&&<span style={{color:T.textDim}}> · {seller.commissionPct}%</span>}
                   </div>
-                  {cls.length>0&&<div style={{background:`${T.green}10`,border:`1px solid ${T.green}25`,borderRadius:8,padding:"6px 12px",fontSize:12}}>{cls.length} clase(s) · <strong style={{color:T.green}}>{fmt(cls.reduce((a,c)=>a+c.amount,0))}</strong></div>}
+                  {cls.length>0&&<div style={{background:`${T.green}10`,border:`1px solid ${T.green}25`,borderRadius:8,padding:"6px 12px",fontSize:12}}>{cls.length} clase(s) · <strong style={{color:T.green}}>{fmt(cls.filter(c=>c.currency!=="ARS").reduce((a,c)=>a+c.amount,0))}</strong></div>}
                 </div>
               </div>
               <Btn variant="ghost" size="sm" onClick={()=>onViewClient(r)}>Ver Ficha →</Btn>
@@ -2386,7 +2387,7 @@ function StaffPortalPage({ staffMember, staff, classes, settlements, clients, ba
               ? <Empty text="Sin clientes asignados" />
               : myClients.map(cl => {
                   const cls = classes.filter(c => c.clientId === cl.id || c.clientName?.toLowerCase() === cl.name?.toLowerCase());
-                  const total = cls.reduce((a, c) => a + c.amount, 0);
+                  const total = cls.filter(c=>c.currency!=="ARS").reduce((a, c) => a + c.amount, 0);
                   return (
                     <Card key={cl.id} onClick={() => setSelClient(cl)} style={{ cursor: "pointer" }}>
                       <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
@@ -2458,20 +2459,21 @@ function EstadisticasPage({classes,staff,clients,config}){
   },[period,customFrom,customTo]);
 
   const fil=useMemo(()=>classes.filter(c=>c.classDate>=from&&c.classDate<=to),[classes,from,to]);
+  const usdFil=useMemo(()=>fil.filter(c=>c.currency!=="ARS"),[fil]);
 
-  const totalAmount=fil.reduce((a,c)=>a+c.amount,0);
-  const totalCobrado=fil.reduce((a,c)=>a+c.paidAmount,0);
-  const schoolNet=fil.reduce((a,c)=>a+c.schoolCut,0);
+  const totalAmount=usdFil.reduce((a,c)=>a+c.amount,0);
+  const totalCobrado=usdFil.reduce((a,c)=>a+c.paidAmount,0);
+  const schoolNet=usdFil.reduce((a,c)=>a+c.schoolCut,0);
 
   const byType=useMemo(()=>{
     const m={};
-    fil.forEach(c=>{const k=c.classTypeName||config.rates.find(r=>r.id===c.classTypeId)?.name||"Sin tipo";if(!m[k])m[k]={count:0,amount:0,school:0};m[k].count++;m[k].amount+=c.amount;m[k].school+=c.schoolCut;});
+    fil.forEach(c=>{const k=c.classTypeName||config.rates.find(r=>r.id===c.classTypeId)?.name||"Sin tipo";if(!m[k])m[k]={count:0,amount:0,school:0};m[k].count++;if(c.currency!=="ARS"){m[k].amount+=c.amount;m[k].school+=c.schoolCut;}});
     return Object.entries(m).sort((a,b)=>b[1].count-a[1].count);
   },[fil]);
 
   const byDisc=useMemo(()=>{
     const m={ski:{label:"Esquí",count:0,amount:0},snowboard:{label:"Snowboard",count:0,amount:0}};
-    fil.forEach(c=>{const k=c.discipline==="snowboard"?"snowboard":"ski";m[k].count++;m[k].amount+=c.amount;});
+    fil.forEach(c=>{const k=c.discipline==="snowboard"?"snowboard":"ski";m[k].count++;if(c.currency!=="ARS")m[k].amount+=c.amount;});
     return Object.entries(m);
   },[fil]);
 
@@ -2480,7 +2482,7 @@ function EstadisticasPage({classes,staff,clients,config}){
     fil.forEach(c=>{
       const k=c.sellerId||"__escuela__";
       if(!m[k]){const s=staff.find(x=>x.id===k);m[k]={name:s?.name||"?",color:T.cyan,count:0,amount:0,school:0};}
-      m[k].count++;m[k].amount+=c.amount;m[k].school+=c.schoolCut;
+      m[k].count++;if(c.currency!=="ARS"){m[k].amount+=c.amount;m[k].school+=c.schoolCut;}
     });
     return Object.entries(m).sort((a,b)=>b[1].count-a[1].count);
   },[fil,staff]);
@@ -2490,7 +2492,7 @@ function EstadisticasPage({classes,staff,clients,config}){
     fil.forEach(c=>{
       const k=c.instructorId||"__none__";
       if(!m[k]){const s=staff.find(x=>x.id===k);m[k]={name:s?.name||"?",count:0,amount:0,earning:0};}
-      m[k].count++;m[k].amount+=c.amount;m[k].earning+=(c.instructorEarning||0);
+      m[k].count++;if(c.currency!=="ARS")m[k].amount+=c.amount;m[k].earning+=(c.instructorEarning||0);
     });
     return Object.entries(m).sort((a,b)=>b[1].count-a[1].count);
   },[fil,staff]);
@@ -2500,7 +2502,7 @@ function EstadisticasPage({classes,staff,clients,config}){
     const sc=fil.filter(c=>(c.sellerId||"__escuela__")===selectedSeller);
     const sellerId=selectedSeller==="__escuela__"?null:selectedSeller;
     const bt={};
-    sc.forEach(c=>{const k=c.classTypeName||"Sin tipo";if(!bt[k])bt[k]={count:0,amount:0,school:0};bt[k].count++;bt[k].amount+=c.amount;bt[k].school+=c.schoolCut;});
+    sc.forEach(c=>{const k=c.classTypeName||"Sin tipo";if(!bt[k])bt[k]={count:0,amount:0,school:0};bt[k].count++;if(c.currency!=="ARS"){bt[k].amount+=c.amount;bt[k].school+=c.schoolCut;}});
     return {
       total:sc.length,
       byType:Object.entries(bt).sort((a,b)=>b[1].count-a[1].count),
@@ -2512,8 +2514,8 @@ function EstadisticasPage({classes,staff,clients,config}){
       pendientes:sc.filter(c=>c.paymentStatus==="pending").length,
       ski:sc.filter(c=>c.discipline!=="snowboard").length,
       snowboard:sc.filter(c=>c.discipline==="snowboard").length,
-      amount:sc.reduce((a,c)=>a+c.amount,0),
-      school:sc.reduce((a,c)=>a+c.schoolCut,0),
+      amount:sc.filter(c=>c.currency!=="ARS").reduce((a,c)=>a+c.amount,0),
+      school:sc.filter(c=>c.currency!=="ARS").reduce((a,c)=>a+c.schoolCut,0),
     };
   },[selectedSeller,fil]);
 
