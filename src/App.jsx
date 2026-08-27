@@ -685,7 +685,7 @@ function ModalStaffEdit({data,config,onSave,onClose}){
 }
 
 // ─── MODAL: LIQUIDAR ──────────────────────────────────────────────────────────
-function ModalSettle({name,staffId,classes,extraCommissions,onConfirm,onClose}){
+function ModalSettle({name,staffId,isOwner,classes,extraCommissions,onConfirm,onClose}){
   const [start,setStart]=useState(daysAgo(15));
   const [end,setEnd]=useState(today);
   const [method,setMethod]=useState("Transferencia");
@@ -707,7 +707,7 @@ function ModalSettle({name,staffId,classes,extraCommissions,onConfirm,onClose}){
     const isInstr=c.instructorId===staffId&&(c.scenario==="instructor_only"||c.scenario==="seller_and_instructor");
     return !isInstr&&c.currency==="ARS";
   }),[toSettle,staffId]);
-  const arsSettleAmount=arsToSettle.reduce((a,c)=>a+(c.sellerCommission||0),0);
+  const arsSettleAmount=arsToSettle.reduce((a,c)=>a+(isOwner?0:(c.sellerCommission||0)),0);
   const extrasToSettle=useMemo(()=>
     (extraCommissions||[]).filter(e=>e.staffId===staffId&&!e.isSettled&&e.date>=start&&e.date<=end)
       .sort((a,b)=>a.date.localeCompare(b.date))
@@ -748,7 +748,7 @@ function ModalSettle({name,staffId,classes,extraCommissions,onConfirm,onClose}){
                 <span style={{color:T.text,fontWeight:600}}>{c.clientName}</span>
                 <span style={{color:T.textDim}}>{fmtDate(c.classDate)} · {c.classTypeName} · <span style={{color:T.purple}}>ARS</span></span>
               </div>
-              <span style={{fontFamily:"monospace",color:T.purple,fontWeight:700}}>${(c.sellerCommission||0).toLocaleString("es-AR")} ARS</span>
+              <span style={{fontFamily:"monospace",color:T.purple,fontWeight:700}}>${(isOwner?0:(c.sellerCommission||0)).toLocaleString("es-AR")} ARS</span>
             </div>
           ))}
           {extrasToSettle.map((e,i)=>(
@@ -1080,10 +1080,10 @@ function AdminApp() {
       {/* PAGES */}
       <div style={{padding:24,maxWidth:1360,margin:"0 auto"}}>
         {page==="planning" &&<PlanningView classes={enrichedClasses} staff={staff} isAdmin={true} onUpdate={isViewer?undefined:updateClassSchedule} onEdit={isViewer?undefined:c=>setModal({type:"class_edit",data:c})} onDelete={isViewer?undefined:async(id)=>{await deleteClass(id);showToast("✓ Clase eliminada")}} onConfirm={confirmClass}/>}
-        {page==="dashboard"&&<DashboardPage staff={staff} classes={enrichedClasses} settlements={settlements} clients={clients} getBalance={getBalance} onSettle={isViewer?undefined:s=>setModal({type:"settle",data:{staffId:s.id,name:s.name}})} onToggle={isViewer?undefined:handleToggle} onViewStaff={s=>{setSelectedStaffId(s.id);setPage("staff");}}/>}
+        {page==="dashboard"&&<DashboardPage staff={staff} classes={enrichedClasses} settlements={settlements} clients={clients} getBalance={getBalance} onSettle={isViewer?undefined:s=>setModal({type:"settle",data:{staffId:s.id,name:s.name,isOwner:s.isOwner}})} onToggle={isViewer?undefined:handleToggle} onViewStaff={s=>{setSelectedStaffId(s.id);setPage("staff");}}/>}
         {page==="classes"  &&<ClassesPage classes={enrichedClasses} staff={staff} clients={clients} onEdit={isViewer?undefined:c=>setModal({type:"class_edit",data:c})} onNew={isViewer?undefined:()=>setModal({type:"class_edit",data:null})} onClientClick={goToClient} onFinanceClick={c=>setModal({type:"class_finance",data:c})} onDelete={isViewer?undefined:async(id)=>{await deleteClass(id);showToast("✓ Clase eliminada")}} onGroupClasses={isViewer?undefined:groupClasses} onUngroupClasses={isViewer?undefined:ungroupClasses} onGroupPayment={isViewer?undefined:registerGroupPayment}/>}
         {page==="clients"  &&<ClientsPage clients={clients} staff={staff} classes={enrichedClasses} selectedClientId={selectedClientId} onClearSelected={()=>setSelectedClientId(null)} onEdit={isViewer?undefined:c=>setModal({type:"client_edit",data:c})} onNew={isViewer?undefined:()=>setModal({type:"client_edit",data:null})}/>}
-        {page==="staff"    &&<StaffPage staff={staff} getBalance={getBalance} settlements={settlements} clients={clients} classes={enrichedClasses} selectedStaffId={selectedStaffId} onClearSelected={()=>setSelectedStaffId(null)} onToggle={isViewer?undefined:handleToggle} onEdit={isViewer?undefined:s=>setModal({type:"staff_edit",data:s})} onNew={isViewer?undefined:()=>setModal({type:"staff_edit",data:null})} onSettle={isViewer?undefined:s=>setModal({type:"settle",data:{staffId:s.id,name:s.name}})} extraCommissions={extraCommissions} onAddExtra={isViewer?undefined:s=>setModal({type:"extra_commission",data:s})} onDeleteExtra={isViewer?undefined:async(id)=>{await deleteExtraCommission(id);showToast("✓ Comisión eliminada");}}/>}
+        {page==="staff"    &&<StaffPage staff={staff} getBalance={getBalance} settlements={settlements} clients={clients} classes={enrichedClasses} selectedStaffId={selectedStaffId} onClearSelected={()=>setSelectedStaffId(null)} onToggle={isViewer?undefined:handleToggle} onEdit={isViewer?undefined:s=>setModal({type:"staff_edit",data:s})} onNew={isViewer?undefined:()=>setModal({type:"staff_edit",data:null})} onSettle={isViewer?undefined:s=>setModal({type:"settle",data:{staffId:s.id,name:s.name,isOwner:s.isOwner}})} extraCommissions={extraCommissions} onAddExtra={isViewer?undefined:s=>setModal({type:"extra_commission",data:s})} onDeleteExtra={isViewer?undefined:async(id)=>{await deleteExtraCommission(id);showToast("✓ Comisión eliminada");}}/>}
         {page==="finanzas" &&<FinanzasPage classes={enrichedClasses} expenses={expenses} staff={staff} config={config} conversions={conversions} onAddExpense={isViewer?undefined:addExpense} onConfirmExpense={isViewer?undefined:confirmExpense} onAddConversion={isViewer?undefined:addConversion} onDeleteConversion={isViewer?undefined:deleteConversion}/>}
         {page==="stats"    &&<EstadisticasPage classes={enrichedClasses} staff={staff} clients={clients} config={config}/>}
         {page==="search"   &&<SearchPage clients={clients} classes={enrichedClasses} staff={staff} onViewClient={c=>{setSelectedClientId(c.id);setPage("clients");}}/>}
@@ -1092,7 +1092,7 @@ function AdminApp() {
       {/* MODALS */}
       {modal?.type==="class_edit"   &&<ModalClassEdit data={modal.data} staff={staff} clients={clients} classes={enrichedClasses} config={config} onSave={handleSaveClass} onClose={()=>setModal(null)}/>}
       {modal?.type==="class_finance"&&<ClassFinanceModal cls={modal.data} staff={staff} onClose={()=>setModal(null)}/>}
-      {modal?.type==="settle"       &&<ModalSettle name={modal.data.name} staffId={modal.data.staffId} classes={enrichedClasses} extraCommissions={extraCommissions} onConfirm={handleSettle} onClose={()=>setModal(null)}/>}
+      {modal?.type==="settle"       &&<ModalSettle name={modal.data.name} staffId={modal.data.staffId} isOwner={modal.data.isOwner} classes={enrichedClasses} extraCommissions={extraCommissions} onConfirm={handleSettle} onClose={()=>setModal(null)}/>}
       {modal?.type==="client_edit"  &&<ModalClientEdit data={modal.data} staff={staff} clients={clients} onSave={handleSaveClient} onClose={()=>setModal(null)}/>}
       {modal?.type==="staff_edit"   &&<ModalStaffEdit data={modal.data} config={config} onSave={handleSaveStaff} onClose={()=>setModal(null)}/>}
 {modal?.type==="extra_commission"&&<ModalExtraCommission staff={modal.data} onSave={async(amount,desc,date)=>{await addExtraCommission(modal.data.id,amount,desc,date);showToast("✓ Comisión registrada");setModal(null);}} onClose={()=>setModal(null)}/>}
@@ -1629,7 +1629,7 @@ function StaffPage({staff,getBalance,settlements,clients,classes,extraCommission
           <span style={{fontWeight:700,flex:1,paddingLeft:8}}>{c.clientName}</span>
           <PayBadge status={c.paymentStatus}/>
           {isARS&&!isInstr
-            ?<span style={{fontFamily:"monospace",color:T.purple,fontWeight:700}}>→ ${(c.sellerCommission||0).toLocaleString("es-AR")} ARS</span>
+            ?<span style={{fontFamily:"monospace",color:T.purple,fontWeight:700}}>→ ${(viewStaff.isOwner?0:(c.sellerCommission||0)).toLocaleString("es-AR")} ARS</span>
             :<span style={{fontFamily:"monospace",color:T.cyan,fontWeight:700}}>→ {fmt(earn)}</span>}
         </div>
         {c.notes&&<div style={{color:T.muted,fontSize:11,marginTop:3}}>{c.notes}</div>}
@@ -1870,6 +1870,8 @@ function FinanzasPage({classes,expenses,staff,config,conversions,onAddExpense,on
   const [newExp,setNewExp]=useState({amount:"",description:"",category:"general",date:today,isPlanned:false,currency:"USD"});
   const [showConvModal,setShowConvModal]=useState(false);
   const [saving,setSaving]=useState(false);
+  const [arsACobrarOpen,setArsACobrarOpen]=useState(false);
+  const [expandedArsVendedor,setExpandedArsVendedor]=useState(null);
   const [season,setSeason]=useState("current");
   const [customFrom,setCustomFrom]=useState(seasonRange().from);
   const [customTo,setCustomTo]=useState(seasonRange().to);
@@ -1924,6 +1926,19 @@ function FinanzasPage({classes,expenses,staff,config,conversions,onAddExpense,on
     if(c.scenario==="own_class") return a;
     const p=c.amount-c.paidAmount; return p>0?a+p:a;
   },0);
+  const byVendedorACobrarARS=useMemo(()=>{
+    const m={};
+    arsClasses.forEach(c=>{
+      if(c.scenario==="own_class") return;
+      const pending=c.amount-c.paidAmount;
+      if(pending<=0) return;
+      const k=c.sellerId||"__escuela__";
+      if(!m[k]){const s=staff.find(x=>x.id===k);m[k]={name:s?.name||"Escuela",amount:0,clases:0,items:[]};}
+      m[k].amount+=pending; m[k].clases++;
+      m[k].items.push(c);
+    });
+    return Object.values(m).sort((a,b)=>b.amount-a.amount);
+  },[arsClasses,staff]);
   const usdExpenses=filteredExpenses.filter(e=>e.currency!=="ARS");
   const arsExpenses=filteredExpenses.filter(e=>e.currency==="ARS");
   const confirmedExpenses=usdExpenses.filter(e=>!e.isPlanned);
@@ -2014,8 +2029,11 @@ function FinanzasPage({classes,expenses,staff,config,conversions,onAddExpense,on
                   <div style={{fontSize:10,color:T.textDim,textTransform:"uppercase",marginBottom:2}}>Cobrado ARS</div>
                   <div style={{fontFamily:"monospace",fontWeight:800,fontSize:18,color:T.green}}>${arsCobrado.toLocaleString("es-AR")}</div>
                 </div>
-                <div style={{background:`${T.orange}0d`,border:`1px solid ${T.orange}25`,borderRadius:8,padding:"10px 14px"}}>
-                  <div style={{fontSize:10,color:T.textDim,textTransform:"uppercase",marginBottom:2}}>A Cobrar ARS</div>
+                <div onClick={arsACobrar>0?()=>{setArsACobrarOpen(p=>!p);setExpandedArsVendedor(null);}:undefined} style={{background:`${T.orange}0d`,border:`1px solid ${arsACobrarOpen?T.orange:T.orange+"25"}`,borderRadius:8,padding:"10px 14px",cursor:arsACobrar>0?"pointer":"default",userSelect:"none"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <div style={{fontSize:10,color:T.textDim,textTransform:"uppercase",marginBottom:2}}>A Cobrar ARS</div>
+                    {arsACobrar>0&&<span style={{fontSize:10,color:T.muted}}>{arsACobrarOpen?"▲":"▼"}</span>}
+                  </div>
                   <div style={{fontFamily:"monospace",fontWeight:800,fontSize:18,color:T.orange}}>${arsACobrar.toLocaleString("es-AR")}</div>
                 </div>
                 {totalGastosARS>0&&<div style={{background:`${T.red}0d`,border:`1px solid ${T.red}25`,borderRadius:8,padding:"10px 14px"}}>
@@ -2026,6 +2044,39 @@ function FinanzasPage({classes,expenses,staff,config,conversions,onAddExpense,on
                   <div style={{fontSize:10,color:T.textDim,textTransform:"uppercase",marginBottom:2}}>Saldo ARS</div>
                   <div style={{fontFamily:"monospace",fontWeight:800,fontSize:18,color:T.gold}}>${(arsCobrado-totalGastosARS).toLocaleString("es-AR")}</div>
                 </div>}
+              </div>
+            )}
+            {arsACobrarOpen&&byVendedorACobrarARS.length>0&&(
+              <div style={{background:`${T.orange}08`,border:`1px solid ${T.orange}30`,borderRadius:8,padding:"10px 14px",fontSize:12}}>
+                <div style={{fontSize:10,fontWeight:700,color:T.orange,textTransform:"uppercase",marginBottom:8}}>Desglose A Cobrar ARS</div>
+                {byVendedorACobrarARS.map((d,i)=>(
+                  <div key={i}>
+                    <div onClick={()=>setExpandedArsVendedor(p=>p===i?null:i)} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${T.border}`,cursor:"pointer",userSelect:"none"}}>
+                      <span style={{color:T.textDim,display:"flex",gap:6,alignItems:"center"}}>
+                        <span style={{fontWeight:600,color:T.text}}>{d.name}</span>
+                        <span style={{color:T.muted}}>({d.clases} clase{d.clases!==1?"s":""})</span>
+                        <span style={{fontSize:9,color:T.muted}}>{expandedArsVendedor===i?"▲":"▼"}</span>
+                      </span>
+                      <span style={{fontFamily:"monospace",color:T.orange,fontWeight:700}}>${d.amount.toLocaleString("es-AR")}</span>
+                    </div>
+                    {expandedArsVendedor===i&&(
+                      <div style={{background:`${T.orange}06`,borderRadius:6,padding:"6px 10px",marginBottom:4}}>
+                        {d.items.slice().sort((a,b)=>a.classDate.localeCompare(b.classDate)).map((c,j)=>{
+                          const instr=staff.find(x=>x.id===c.instructorId);
+                          return(
+                            <div key={j} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0",borderBottom:j<d.items.length-1?`1px solid ${T.border}33`:"none",fontSize:11}}>
+                              <div style={{display:"flex",flexDirection:"column",gap:1}}>
+                                <span style={{color:T.text,fontWeight:600}}>{c.clientName||"—"}</span>
+                                <span style={{color:T.muted}}>{fmtDate(c.classDate)} · {instr?.name||"Sin instructor"}</span>
+                              </div>
+                              <span style={{fontFamily:"monospace",color:T.orange,fontWeight:700}}>${(c.amount-c.paidAmount).toLocaleString("es-AR")}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
             {confirmedArsExpenses.length>0&&(
