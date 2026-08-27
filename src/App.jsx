@@ -2481,11 +2481,14 @@ function EstadisticasPage({classes,staff,clients,config}){
   },[period,customFrom,customTo]);
 
   const fil=useMemo(()=>classes.filter(c=>c.classDate>=from&&c.classDate<=to),[classes,from,to]);
-  const usdFil=useMemo(()=>fil.filter(c=>c.currency!=="ARS"),[fil]);
+  const schoolFil=useMemo(()=>fil.filter(c=>c.scenario!=="own_class"&&c.currency!=="ARS"),[fil]);
+  const ownFil=useMemo(()=>fil.filter(c=>c.scenario==="own_class"),[fil]);
 
-  const totalAmount=usdFil.reduce((a,c)=>a+c.amount,0);
-  const totalCobrado=usdFil.reduce((a,c)=>a+c.paidAmount,0);
-  const schoolNet=usdFil.reduce((a,c)=>a+c.schoolCut,0);
+  const totalAmount=schoolFil.reduce((a,c)=>a+c.amount,0);
+  const totalCobrado=schoolFil.reduce((a,c)=>a+c.paidAmount,0);
+  const schoolNet=schoolFil.reduce((a,c)=>a+c.schoolCut,0);
+  const ownCount=ownFil.length;
+  const ownCut=ownFil.reduce((a,c)=>a+(c.schoolCut||0),0);
 
   const byType=useMemo(()=>{
     const m={};
@@ -2510,13 +2513,32 @@ function EstadisticasPage({classes,staff,clients,config}){
   },[fil,staff]);
 
   const byInstr=useMemo(()=>{
-    const m={"__none__":{name:"Sin asignar",count:0,amount:0,earning:0}};
+    const m={};
+    const ensure=id=>{if(!m[id]){const s=staff.find(x=>x.id===id);m[id]={name:s?.name||"?",propias:0,propiasCut:0,vendio:0,vendioCutUSD:0,vendioCutARS:0,asig:0,asigCutUSD:0,asigCutARS:0,honorarios:0};}};
     fil.forEach(c=>{
-      const k=c.instructorId||"__none__";
-      if(!m[k]){const s=staff.find(x=>x.id===k);m[k]={name:s?.name||"?",count:0,amount:0,earning:0};}
-      m[k].count++;if(c.currency!=="ARS")m[k].amount+=c.amount;m[k].earning+=(c.instructorEarning||0);
+      if(c.scenario==="own_class"&&c.instructorId){
+        ensure(c.instructorId);
+        m[c.instructorId].propias++;
+        m[c.instructorId].propiasCut+=(c.schoolCut||0);
+      }
+      if(c.sellerId&&c.scenario!=="own_class"){
+        ensure(c.sellerId);
+        m[c.sellerId].vendio++;
+        if(c.currency==="ARS") m[c.sellerId].vendioCutARS+=(c.schoolCut||0);
+        else m[c.sellerId].vendioCutUSD+=(c.schoolCut||0);
+      }
+      if(c.instructorId&&c.scenario!=="own_class"){
+        ensure(c.instructorId);
+        m[c.instructorId].asig++;
+        if(!c.sellerId){
+          if(c.currency==="ARS") m[c.instructorId].asigCutARS+=(c.schoolCut||0);
+          else m[c.instructorId].asigCutUSD+=(c.schoolCut||0);
+        }
+        const instrStaff=staff.find(s=>s.id===c.instructorId);
+        if(!(c.currency==="ARS"&&instrStaff?.isOwner)) m[c.instructorId].honorarios+=(c.instructorEarning||0);
+      }
     });
-    return Object.entries(m).sort((a,b)=>b[1].count-a[1].count);
+    return Object.entries(m).sort((a,b)=>(b[1].propias+b[1].vendio+b[1].asig)-(a[1].propias+a[1].vendio+a[1].asig));
   },[fil,staff]);
 
   const sellerDetail=useMemo(()=>{
@@ -2567,12 +2589,20 @@ function EstadisticasPage({classes,staff,clients,config}){
       </Card>
 
       {/* Resumen */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:12}}>
-        <Card style={{padding:"12px 16px"}}><Stat label="Total Clases" value={fil.length} color={T.text} icon="▤"/></Card>
-        <Card style={{padding:"12px 16px"}}><Stat label="Facturado" value={fmt(totalAmount)} color={T.text}/></Card>
-        <Card style={{padding:"12px 16px"}}><Stat label="Cobrado" value={fmt(totalCobrado)} color={T.green}/></Card>
-        <Card style={{padding:"12px 16px"}}><Stat label="Pendiente" value={fmt(totalAmount-totalCobrado)} color={totalAmount-totalCobrado>0?T.orange:T.green}/></Card>
-        <Card style={{padding:"12px 16px"}}><Stat label="Neto Escuela" value={fmt(schoolNet)} color={T.gold} icon="★"/></Card>
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        <div style={{fontSize:10,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.07em"}}>Canal Escuela</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10}}>
+          <Card style={{padding:"12px 16px"}}><Stat label="Clases" value={schoolFil.length} color={T.text} icon="▤"/></Card>
+          <Card style={{padding:"12px 16px"}}><Stat label="Facturado" value={fmt(totalAmount)} color={T.text}/></Card>
+          <Card style={{padding:"12px 16px"}}><Stat label="Cobrado" value={fmt(totalCobrado)} color={T.green}/></Card>
+          <Card style={{padding:"12px 16px"}}><Stat label="Pendiente" value={fmt(totalAmount-totalCobrado)} color={totalAmount-totalCobrado>0?T.orange:T.green}/></Card>
+          <Card style={{padding:"12px 16px"}}><Stat label="Neto Escuela" value={fmt(schoolNet)} color={T.gold} icon="★"/></Card>
+        </div>
+        <div style={{fontSize:10,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.07em",marginTop:4}}>Clases Propias Instructores</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10}}>
+          <Card style={{padding:"12px 16px"}}><Stat label="Clases" value={ownCount} color={T.purple} icon="★"/></Card>
+          <Card style={{padding:"12px 16px"}}><Stat label="Aporte Escuela" value={fmt(ownCut)} color={T.gold}/></Card>
+        </div>
       </div>
 
       {/* Disciplinas */}
@@ -2680,20 +2710,72 @@ function EstadisticasPage({classes,staff,clients,config}){
       {/* Por instructor */}
       <Card style={{padding:0,overflow:"hidden"}}>
         <div style={{padding:"14px 16px",borderBottom:`1px solid ${T.border}`}}><SectionTitle>Por Instructor</SectionTitle></div>
-        <table style={{width:"100%",borderCollapse:"collapse"}}>
-          <thead><tr><TH>Instructor</TH><TH>Clases</TH><TH>Facturado</TH><TH>Honorarios</TH></tr></thead>
-          <tbody>
-            {byInstr.map(([k,d])=>(
-              <tr key={k}>
-                <TD style={{fontWeight:600,color:k==="__none__"?T.muted:T.text}}>{k==="__none__"?"—":d.name}</TD>
-                <TD style={{fontFamily:"monospace"}}>{d.count}</TD>
-                <TD style={{fontFamily:"monospace",color:T.green}}>{fmt(d.amount)}</TD>
-                <TD style={{fontFamily:"monospace",color:T.purple}}>{fmt(d.earning)}</TD>
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",minWidth:980}}>
+            <thead>
+              <tr>
+                <TH>Instructor</TH>
+                <TH>Propias</TH><TH>S.Cut</TH>
+                <TH>Vendió</TH><TH>S.Cut $</TH><TH>S.Cut ARS</TH>
+                <TH>Asig.</TH><TH>S.Cut $</TH><TH>S.Cut ARS</TH><TH>Honor.</TH>
+                <TH style={{borderLeft:`2px solid ${T.border}`}}>Total $</TH><TH>Total ARS</TH>
               </tr>
-            ))}
-            {byInstr.length===0&&<tr><td colSpan={4}><Empty text="Sin clases"/></td></tr>}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {byInstr.map(([k,d])=>{
+                const totalUSD=d.propiasCut+d.vendioCutUSD+d.asigCutUSD;
+                const totalARS=d.vendioCutARS+d.asigCutARS;
+                return(
+                <tr key={k}>
+                  <TD style={{fontWeight:600}}>{d.name}</TD>
+                  <TD style={{fontFamily:"monospace",color:T.purple}}>{d.propias||"—"}</TD>
+                  <TD style={{fontFamily:"monospace",color:T.gold}}>{d.propias?fmt(d.propiasCut):"—"}</TD>
+                  <TD style={{fontFamily:"monospace",color:T.cyan}}>{d.vendio||"—"}</TD>
+                  <TD style={{fontFamily:"monospace",color:T.gold}}>{d.vendioCutUSD?fmt(d.vendioCutUSD):"—"}</TD>
+                  <TD style={{fontFamily:"monospace",color:T.orange}}>{d.vendioCutARS?fmt(d.vendioCutARS):"—"}</TD>
+                  <TD style={{fontFamily:"monospace",color:T.text}}>{d.asig||"—"}</TD>
+                  <TD style={{fontFamily:"monospace",color:T.gold}}>{d.asigCutUSD?fmt(d.asigCutUSD):"—"}</TD>
+                  <TD style={{fontFamily:"monospace",color:T.orange}}>{d.asigCutARS?fmt(d.asigCutARS):"—"}</TD>
+                  <TD style={{fontFamily:"monospace",color:T.purple}}>{d.honorarios?fmt(d.honorarios):"—"}</TD>
+                  <TD style={{fontFamily:"monospace",color:T.gold,fontWeight:700,borderLeft:`2px solid ${T.border}`}}>{totalUSD?fmt(totalUSD):"—"}</TD>
+                  <TD style={{fontFamily:"monospace",color:T.orange,fontWeight:700}}>{totalARS?fmt(totalARS):"—"}</TD>
+                </tr>
+                );
+              })}
+              {byInstr.length===0&&<tr><td colSpan={12}><Empty text="Sin clases"/></td></tr>}
+            </tbody>
+            {byInstr.length>0&&(()=>{
+              const tot=byInstr.reduce((a,[,d])=>({
+                propias:a.propias+d.propias,propiasCut:a.propiasCut+d.propiasCut,
+                vendio:a.vendio+d.vendio,vendioCutUSD:a.vendioCutUSD+d.vendioCutUSD,vendioCutARS:a.vendioCutARS+d.vendioCutARS,
+                asig:a.asig+d.asig,asigCutUSD:a.asigCutUSD+d.asigCutUSD,asigCutARS:a.asigCutARS+d.asigCutARS,
+                honorarios:a.honorarios+d.honorarios,
+              }),{propias:0,propiasCut:0,vendio:0,vendioCutUSD:0,vendioCutARS:0,asig:0,asigCutUSD:0,asigCutARS:0,honorarios:0});
+              const totUSD=tot.propiasCut+tot.vendioCutUSD+tot.asigCutUSD;
+              const totARS=tot.vendioCutARS+tot.asigCutARS;
+              const fs={fontFamily:"monospace",fontWeight:700,fontSize:12};
+              const bt={borderTop:`2px solid ${T.border}`,background:`${T.border}30`};
+              return(
+                <tfoot>
+                  <tr>
+                    <TD style={{...bt,fontWeight:700,fontSize:12}}>TOTAL</TD>
+                    <TD style={{...bt,...fs,color:T.purple}}>{tot.propias}</TD>
+                    <TD style={{...bt,...fs,color:T.gold}}>{fmt(tot.propiasCut)}</TD>
+                    <TD style={{...bt,...fs,color:T.cyan}}>{tot.vendio}</TD>
+                    <TD style={{...bt,...fs,color:T.gold}}>{fmt(tot.vendioCutUSD)}</TD>
+                    <TD style={{...bt,...fs,color:T.orange}}>{fmt(tot.vendioCutARS)}</TD>
+                    <TD style={{...bt,...fs,color:T.text}}>{tot.asig}</TD>
+                    <TD style={{...bt,...fs,color:T.gold}}>{fmt(tot.asigCutUSD)}</TD>
+                    <TD style={{...bt,...fs,color:T.orange}}>{fmt(tot.asigCutARS)}</TD>
+                    <TD style={{...bt,...fs,color:T.purple}}>{fmt(tot.honorarios)}</TD>
+                    <TD style={{...bt,...fs,color:T.gold,borderLeft:`2px solid ${T.border}`}}>{fmt(totUSD)}</TD>
+                    <TD style={{...bt,...fs,color:T.orange}}>{fmt(totARS)}</TD>
+                  </tr>
+                </tfoot>
+              );
+            })()}
+          </table>
+        </div>
       </Card>
     </div>
   );
