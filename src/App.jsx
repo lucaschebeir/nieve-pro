@@ -698,16 +698,22 @@ function ModalSettle({name,staffId,isOwner,classes,extraCommissions,onConfirm,on
   ,[classes,staffId,start,end]);
   const toSettleWithEarn=useMemo(()=>toSettle.filter(c=>{
     const isInstr=c.instructorId===staffId&&(c.scenario==="instructor_only"||c.scenario==="seller_and_instructor");
+    if(isInstr&&c.currency==="ARS"&&isOwner) return false;
     return isInstr||c.currency!=="ARS";
   }).map(c=>{
     const earn=(c.instructorId===staffId&&(c.scenario==="instructor_only"||c.scenario==="seller_and_instructor"))?c.instructorEarning:c.sellerCommission;
     return {...c,earn:earn||0};
-  }),[toSettle,staffId]);
+  }),[toSettle,staffId,isOwner]);
   const arsToSettle=useMemo(()=>toSettle.filter(c=>{
     const isInstr=c.instructorId===staffId&&(c.scenario==="instructor_only"||c.scenario==="seller_and_instructor");
+    if(isInstr&&c.currency==="ARS"&&isOwner) return true;
     return !isInstr&&c.currency==="ARS";
-  }),[toSettle,staffId]);
-  const arsSettleAmount=arsToSettle.reduce((a,c)=>a+(isOwner?0:(c.sellerCommission||0)),0);
+  }),[toSettle,staffId,isOwner]);
+  const arsSettleAmount=arsToSettle.reduce((a,c)=>{
+    const isInstr=c.instructorId===staffId&&(c.scenario==="instructor_only"||c.scenario==="seller_and_instructor");
+    if(isInstr&&isOwner) return a+(c.instructorEarning||0);
+    return a+(isOwner?0:(c.sellerCommission||0));
+  },0);
   const extrasToSettle=useMemo(()=>
     (extraCommissions||[]).filter(e=>e.staffId===staffId&&!e.isSettled&&e.date>=start&&e.date<=end)
       .sort((a,b)=>a.date.localeCompare(b.date))
@@ -742,15 +748,19 @@ function ModalSettle({name,staffId,isOwner,classes,extraCommissions,onConfirm,on
               <span style={{fontFamily:"monospace",color:T.gold,fontWeight:700}}>{fmt(c.earn)}</span>
             </div>
           ))}
-          {arsToSettle.map((c,i)=>(
+          {arsToSettle.map((c,i)=>{
+            const isInstrARS=c.instructorId===staffId&&(c.scenario==="instructor_only"||c.scenario==="seller_and_instructor");
+            const arsAmt=isInstrARS&&isOwner?(c.instructorEarning||0):(isOwner?0:(c.sellerCommission||0));
+            return(
             <div key={c.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 12px",borderBottom:`1px solid ${T.border}`,background:i%2===0?`${T.purple}08`:"none"}}>
               <div style={{display:"flex",flexDirection:"column",gap:1}}>
                 <span style={{color:T.text,fontWeight:600}}>{c.clientName}</span>
                 <span style={{color:T.textDim}}>{fmtDate(c.classDate)} · {c.classTypeName} · <span style={{color:T.purple}}>ARS</span></span>
               </div>
-              <span style={{fontFamily:"monospace",color:T.purple,fontWeight:700}}>${(isOwner?0:(c.sellerCommission||0)).toLocaleString("es-AR")} ARS</span>
+              <span style={{fontFamily:"monospace",color:T.purple,fontWeight:700}}>${arsAmt.toLocaleString("es-AR")} ARS</span>
             </div>
-          ))}
+            );
+          })}
           {extrasToSettle.map((e,i)=>(
             <div key={e.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 12px",borderBottom:(toSettle.length+i<totalItems-1)?`1px solid ${T.border}`:"none",background:(toSettle.length+i)%2===0?T.surface:"none"}}>
               <div style={{display:"flex",flexDirection:"column",gap:1}}>
@@ -1628,9 +1638,11 @@ function StaffPage({staff,getBalance,settlements,clients,classes,extraCommission
           <span style={{color:T.textDim}}>{fmtDate(c.classDate)}</span>
           <span style={{fontWeight:700,flex:1,paddingLeft:8}}>{c.clientName}</span>
           <PayBadge status={c.paymentStatus}/>
-          {isARS&&!isInstr
-            ?<span style={{fontFamily:"monospace",color:T.purple,fontWeight:700}}>→ ${(viewStaff.isOwner?0:(c.sellerCommission||0)).toLocaleString("es-AR")} ARS</span>
-            :<span style={{fontFamily:"monospace",color:T.cyan,fontWeight:700}}>→ {fmt(earn)}</span>}
+          {isARS&&isInstr&&viewStaff.isOwner
+            ?<span style={{fontFamily:"monospace",color:T.purple,fontWeight:700}}>→ ${(c.instructorEarning||0).toLocaleString("es-AR")} ARS</span>
+            :isARS&&!isInstr
+              ?<span style={{fontFamily:"monospace",color:T.purple,fontWeight:700}}>→ ${(viewStaff.isOwner?0:(c.sellerCommission||0)).toLocaleString("es-AR")} ARS</span>
+              :<span style={{fontFamily:"monospace",color:T.cyan,fontWeight:700}}>→ {fmt(earn)}</span>}
         </div>
         {c.notes&&<div style={{color:T.muted,fontSize:11,marginTop:3}}>{c.notes}</div>}
       </div>);
