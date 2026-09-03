@@ -43,11 +43,11 @@ const CLASS_DURATIONS = {
   "e498e156-1668-4b5d-b0f8-fec47def2948": 270, // Mini Day  9:30-14:00
   "1ae8e449-40ac-444a-b524-220f81e150c6": 180, // Half Day  3hs
   "1e71732f-a418-44d4-8a4c-34b721aeec04": 120, // 2 Horas
-  "44deac8a-0fcc-45c7-bd46-feb14be29eb5": 180, // Grupal    3hs
+  "44deac8a-0fcc-45c7-bd46-feb14be29eb5": 60, // 1 Hora
 };
 // Fallback por nombre (para clases con class_type_id vacío en BD)
 const DURATION_BY_NAME = {
-  "Full Day": 420, "Mini Day": 270, "Half Day": 180, "2 Horas": 120, "Clase Grupal": 180,
+  "Full Day": 420, "Mini Day": 270, "Half Day": 180, "2 Horas": 120, "Clase Grupal": 60, "1 hora": 60,
 };
 
 // Horarios fijos para tipos que no tienen flexibilidad

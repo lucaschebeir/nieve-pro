@@ -456,6 +456,12 @@ export function useConfig() {
     for (const u of updates) {
       await supabase.from("school_config").update({ value: u.value }).eq("key", u.key);
     }
+
+    // Sincronizar nombre y horas en class_types
+    for (const r of newConfig.rates) {
+      await supabase.from("class_types").update({ name: r.name, hours: r.hours }).eq("id", r.id);
+    }
+
     setConfig(newConfig);
   }
 
