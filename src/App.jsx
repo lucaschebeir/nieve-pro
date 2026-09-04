@@ -1045,7 +1045,7 @@ function AdminApp() {
 
   // Staff no-admin y no-viewer va directo a su portal personal
   if (!isAdmin && !isViewer) {
-    return <StaffPortalPage staffMember={staffProfile} staff={staff} classes={enrichedClasses} settlements={settlements} clients={clients} balance={getBalance(staffProfile?.id)} onConfirm={confirmClass} onSignOut={signOut}/>;
+    return <StaffPortalPage staffMember={staffProfile} staff={staff} classes={enrichedClasses} settlements={settlements} clients={clients} balance={getBalance(staffProfile?.id)} onConfirm={confirmClass} onSignOut={signOut} extraCommissions={extraCommissions}/>;
   }
 
   const NAV = [
@@ -2271,7 +2271,7 @@ function ConfigPage({config,onSave,staff,onSaveStaff,onRecalculate}){
 }
 
 // ─── STAFF PORTAL (vista del staff logueado) ──────────────────────────────────
-function StaffPortalPage({ staffMember, staff, classes, settlements, clients, balance, onConfirm, onSignOut }) {
+function StaffPortalPage({ staffMember, staff, classes, settlements, clients, balance, onConfirm, onSignOut, extraCommissions }) {
   const myClasses = classes
     .filter(c => c.sellerId === staffMember?.id || c.instructorId === staffMember?.id)
     .sort((a, b) => b.classDate?.localeCompare(a.classDate));
@@ -2290,11 +2290,16 @@ function StaffPortalPage({ staffMember, staff, classes, settlements, clients, ba
     ["history", "Historial"],
     ["settlements", "Liquidaciones"],
     ...(isSeller ? [["clients", "Mis Clientes"]] : []),
+    ...(isInstructor ? [["horas", "Mis Horas"]] : []),
   ];
   const [tab, setTab] = useState("pending");
   const [selClient, setSelClient] = useState(null);
   const [histFrom, setHistFrom] = useState("");
   const [histTo, setHistTo] = useState("");
+  const [horasPeriod, setHorasPeriod] = useState("month");
+  const [horasCustomFrom, setHorasCustomFrom] = useState(daysAgo(30));
+  const [horasCustomTo, setHorasCustomTo] = useState(today);
+  const myExtras = (extraCommissions||[]).filter(e => e.staffId === staffMember?.id && !e.isSettled);
 
   const pendingClasses  = myClasses.filter(c => isPendingFor(c, staffMember?.id));
   const settledClasses  = myClasses.filter(c => !isPendingFor(c, staffMember?.id));
@@ -2397,6 +2402,21 @@ function StaffPortalPage({ staffMember, staff, classes, settlements, clients, ba
                     <thead><tr>{cols.map(h=><TH key={h}>{h}</TH>)}</tr></thead>
                     <tbody>{futuras.map(c=><PendingRow key={c.id} c={c}/>)}</tbody>
                   </table>
+                </Card>
+              )}
+              {myExtras.length>0&&(
+                <Card>
+                  <div style={{fontWeight:700,fontSize:13,marginBottom:10}}>Comisiones adicionales</div>
+                  <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                    {myExtras.map(e=>(
+                      <div key={e.id} style={{background:T.bg,borderRadius:8,padding:"10px 14px",fontSize:12,borderLeft:`3px solid ${T.teal}`,display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+                        <span style={{color:T.textDim}}>{fmtDate(e.date)}</span>
+                        <span style={{fontWeight:700,flex:1,paddingLeft:8}}>{e.description}</span>
+                        <Badge text="EXTRA" color={T.teal} small/>
+                        <span style={{fontFamily:"monospace",color:T.teal,fontWeight:700}}>→ {fmt(e.amount)}</span>
+                      </div>
+                    ))}
+                  </div>
                 </Card>
               )}
             </div>
@@ -2516,6 +2536,100 @@ function StaffPortalPage({ staffMember, staff, classes, settlements, clients, ba
         {tab === "agenda" && (
           <PlanningInstructorView classes={classes} staffMember={staffMember} staff={staff} onConfirm={onConfirm} clients={clients} />
         )}
+
+        {/* Tab: Mis Horas */}
+        {tab === "horas" && isInstructor && (()=>{
+          const n=new Date();
+          const horasFrom = horasPeriod==="month"
+            ? `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}-01`
+            : horasPeriod==="season" ? seasonStart
+            : horasCustomFrom;
+          const horasTo = horasPeriod==="custom" ? horasCustomTo : today;
+
+          const instrClasses = myClasses.filter(c =>
+            c.instructorId===staffMember?.id &&
+            c.classDate>=horasFrom && c.classDate<=horasTo
+          );
+          const propias = instrClasses.filter(c=>c.scenario==="own_class");
+          const escuela = instrClasses.filter(c=>c.scenario!=="own_class");
+          const hPropias = propias.reduce((a,c)=>a+(c.instructorHours||0),0);
+          const hEscuela = escuela.reduce((a,c)=>a+(c.instructorHours||0),0);
+          const hTotal = hPropias+hEscuela;
+
+          // Desglose mensual
+          const byMonth={};
+          instrClasses.forEach(c=>{
+            const ym=c.classDate?.slice(0,7);
+            if(!byMonth[ym]) byMonth[ym]={propias:0,escuela:0};
+            if(c.scenario==="own_class") byMonth[ym].propias+=(c.instructorHours||0);
+            else byMonth[ym].escuela+=(c.instructorHours||0);
+          });
+          const months=Object.keys(byMonth).sort();
+          const promedio=months.length>0?(hTotal/months.length).toFixed(1):0;
+
+          return(
+            <div style={{display:"flex",flexDirection:"column",gap:16}}>
+              {/* Selector período */}
+              <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+                {[["month","Este mes"],["season","Temporada"],["custom","Personalizado"]].map(([v,l])=>(
+                  <button key={v} onClick={()=>setHorasPeriod(v)} style={{background:horasPeriod===v?T.accent:"none",border:`1px solid ${horasPeriod===v?T.accent:T.border}`,color:horasPeriod===v?T.white:T.textDim,padding:"6px 14px",borderRadius:6,fontSize:12,fontWeight:horasPeriod===v?700:400,cursor:"pointer",fontFamily:"inherit"}}>{l}</button>
+                ))}
+                {horasPeriod==="custom"&&(
+                  <div style={{display:"flex",gap:8}}>
+                    <Inp label="Desde" type="date" value={horasCustomFrom} onChange={setHorasCustomFrom}/>
+                    <Inp label="Hasta" type="date" value={horasCustomTo} onChange={setHorasCustomTo}/>
+                  </div>
+                )}
+              </div>
+
+              {/* KPIs */}
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:12}}>
+                <Card style={{background:`${T.cyan}0d`,borderColor:`${T.cyan}25`}}>
+                  <Stat label="Horas Propias" value={`${hPropias}h`} color={T.cyan} sub={`${propias.length} clase(s)`}/>
+                </Card>
+                <Card style={{background:`${T.purple}0d`,borderColor:`${T.purple}25`}}>
+                  <Stat label="Horas Escuela" value={`${hEscuela}h`} color={T.purple} sub={`${escuela.length} clase(s)`}/>
+                </Card>
+                <Card style={{background:`${T.green}0d`,borderColor:`${T.green}25`}}>
+                  <Stat label="Total" value={`${hTotal}h`} color={T.green} sub={horasPeriod!=="month"?`~${promedio}h/mes prom.`:undefined}/>
+                </Card>
+              </div>
+
+              {/* Desglose mensual (solo si hay más de un mes) */}
+              {months.length>1&&(
+                <Card style={{padding:0,overflow:"auto"}}>
+                  <div style={{padding:"10px 16px",borderBottom:`1px solid ${T.border}`,fontWeight:700,fontSize:13}}>Desglose por mes</div>
+                  <table style={{width:"100%",borderCollapse:"collapse"}}>
+                    <thead><tr>{["Mes","Propias","Escuela","Total"].map(h=><TH key={h}>{h}</TH>)}</tr></thead>
+                    <tbody>
+                      {months.map(ym=>{
+                        const [y,m]=ym.split("-");
+                        const label=new Date(+y,+m-1,1).toLocaleString("es-AR",{month:"short",year:"2-digit"});
+                        const p=byMonth[ym].propias, e=byMonth[ym].escuela;
+                        return(
+                          <tr key={ym}>
+                            <TD style={{textTransform:"capitalize"}}>{label}</TD>
+                            <TD style={{fontFamily:"monospace",color:T.cyan}}>{p}h</TD>
+                            <TD style={{fontFamily:"monospace",color:T.purple}}>{e}h</TD>
+                            <TD style={{fontFamily:"monospace",fontWeight:700}}>{p+e}h</TD>
+                          </tr>
+                        );
+                      })}
+                      <tr style={{borderTop:`2px solid ${T.border}`}}>
+                        <TD style={{fontWeight:700}}>Total</TD>
+                        <TD style={{fontFamily:"monospace",color:T.cyan,fontWeight:700}}>{hPropias}h</TD>
+                        <TD style={{fontFamily:"monospace",color:T.purple,fontWeight:700}}>{hEscuela}h</TD>
+                        <TD style={{fontFamily:"monospace",fontWeight:900,color:T.green}}>{hTotal}h</TD>
+                      </tr>
+                    </tbody>
+                  </table>
+                </Card>
+              )}
+
+              {instrClasses.length===0&&<Empty text="Sin clases en este período"/>}
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
