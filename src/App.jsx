@@ -1905,6 +1905,7 @@ function FinanzasPage({classes,expenses,staff,config,conversions,onAddExpense,on
     return a+hours*defaultHourlyRate;
   },0);
   const totalConversionesUSD=filteredConversions.reduce((a,c)=>a+c.usdAmount,0);
+  const totalConversionesARS=filteredConversions.reduce((a,c)=>a+(c.arsAmount||0),0);
   const ingresosBrutos=usdClasses.reduce((a,c)=>{
     if(c.scenario==="own_class") return a;
     return a+c.paidAmount;
@@ -2052,9 +2053,9 @@ function FinanzasPage({classes,expenses,staff,config,conversions,onAddExpense,on
                   <div style={{fontSize:10,color:T.textDim,textTransform:"uppercase",marginBottom:2}}>Gastos ARS</div>
                   <div style={{fontFamily:"monospace",fontWeight:800,fontSize:18,color:T.red}}>−${totalGastosARS.toLocaleString("es-AR")}</div>
                 </div>}
-                {(arsCobrado-totalGastosARS)!==0&&<div style={{background:`${T.gold}0d`,border:`1px solid ${T.gold}25`,borderRadius:8,padding:"10px 14px"}}>
+                {(arsCobrado-totalGastosARS-totalConversionesARS)!==0&&<div style={{background:`${T.gold}0d`,border:`1px solid ${T.gold}25`,borderRadius:8,padding:"10px 14px"}}>
                   <div style={{fontSize:10,color:T.textDim,textTransform:"uppercase",marginBottom:2}}>Saldo ARS</div>
-                  <div style={{fontFamily:"monospace",fontWeight:800,fontSize:18,color:T.gold}}>${(arsCobrado-totalGastosARS).toLocaleString("es-AR")}</div>
+                  <div style={{fontFamily:"monospace",fontWeight:800,fontSize:18,color:T.gold}}>${(arsCobrado-totalGastosARS-totalConversionesARS).toLocaleString("es-AR")}</div>
                 </div>}
               </div>
             )}
