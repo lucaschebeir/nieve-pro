@@ -1562,11 +1562,21 @@ function StaffPage({staff,getBalance,settlements,clients,classes,extraCommission
   const [selClient,setSelClient]=useState(null);
   const [histFrom,setHistFrom]=useState("");
   const [histTo,setHistTo]=useState("");
+  const [statsPeriod,setStatsPeriod]=useState("season");
+  const [statsFrom,setStatsFrom]=useState(seasonRange().from);
+  const [statsTo,setStatsTo]=useState(seasonRange().to);
   const pendingMap=useMemo(()=>{const m={};staff.forEach(s=>{m[s.id]=calcPendingPast(classes,s.id);});return m;},[classes,staff]);
   const viewStaff=viewId?staff.find(s=>s.id===viewId):null;
   if(viewStaff){
     const bal=getBalance(viewStaff.id);
     const myClasses=classes.filter(c=>c.sellerId===viewStaff.id||c.instructorId===viewStaff.id).sort((a,b)=>b.classDate?.localeCompare(a.classDate));
+    const sFrom=statsPeriod==="season"?seasonRange().from:statsPeriod==="month"?`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,"0")}-01`:statsPeriod==="custom"?statsFrom:"2000-01-01";
+    const sTo=statsPeriod==="custom"?statsTo:today;
+    const statsClasses=myClasses.filter(c=>c.classDate>=sFrom&&c.classDate<=sTo);
+    const isInstructor=viewStaff.role==="instructor"||viewStaff.role==="both";
+    const instrStatsClasses=statsClasses.filter(c=>c.instructorId===viewStaff.id);
+    const horasPropias=instrStatsClasses.filter(c=>c.scenario==="own_class").reduce((a,c)=>a+(c.instructorHours||0),0);
+    const horasEscuela=instrStatsClasses.filter(c=>c.scenario!=="own_class").reduce((a,c)=>a+(c.instructorHours||0),0);
     const pendingPast=myClasses.filter(c=>c.classDone&&isPendingFor(c,viewStaff.id)).reduce((a,c)=>{
       const isInstr=c.instructorId===viewStaff.id&&(c.scenario==="instructor_only"||c.scenario==="seller_and_instructor");
       if(isInstr){
@@ -1587,8 +1597,8 @@ function StaffPage({staff,getBalance,settlements,clients,classes,extraCommission
     },0);
     const mySettlements=settlements.filter(s=>s.staffId===viewStaff.id);
     const myClients=clients.filter(c=>c.sellerId===viewStaff.id);
-    const clasesPropias=myClasses.filter(c=>c.scenario==="own_class").length;
-    const clasesAsignadas=myClasses.length-clasesPropias;
+    const clasesPropias=statsClasses.filter(c=>c.scenario==="own_class").length;
+    const clasesAsignadas=statsClasses.length-clasesPropias;
     const isSeller=viewStaff.role==="seller"||viewStaff.role==="both";
     const tabs=[["pending","Pendientes"],["history","Historial"],["settlements","Liquidaciones"],...(isSeller?[["clients",`Cartera (${myClients.length})`]]:[])] ;
     return(
@@ -1613,8 +1623,20 @@ function StaffPage({staff,getBalance,settlements,clients,classes,extraCommission
 <Btn variant="gold" size="sm" disabled={pendingPast===0&&pendingARS===0} onClick={()=>onSettle(viewStaff)}>✓ Liquidar</Btn>
             </div>
           </div>
+          {/* Selector período para stats */}
+          <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:10,alignItems:"center"}}>
+            <span style={{fontSize:10,color:T.muted,fontWeight:700,textTransform:"uppercase"}}>Período:</span>
+            {[["season","Temporada"],["month","Este mes"],["all","Todo"],["custom","Personalizado"]].map(([v,l])=>(
+              <button key={v} onClick={()=>setStatsPeriod(v)} style={{background:statsPeriod===v?T.accent:"none",border:`1px solid ${statsPeriod===v?T.accent:T.border}`,color:statsPeriod===v?T.white:T.textDim,padding:"4px 10px",borderRadius:5,fontSize:11,fontWeight:statsPeriod===v?700:400,cursor:"pointer",fontFamily:"inherit"}}>{l}</button>
+            ))}
+            {statsPeriod==="custom"&&<>
+              <input type="date" value={statsFrom} onChange={e=>setStatsFrom(e.target.value)} style={{background:T.surface,border:`1px solid ${T.border}`,color:T.text,borderRadius:6,padding:"3px 8px",fontSize:11,outline:"none",fontFamily:"inherit"}}/>
+              <span style={{color:T.muted,fontSize:11}}>—</span>
+              <input type="date" value={statsTo} onChange={e=>setStatsTo(e.target.value)} style={{background:T.surface,border:`1px solid ${T.border}`,color:T.text,borderRadius:6,padding:"3px 8px",fontSize:11,outline:"none",fontFamily:"inherit"}}/>
+            </>}
+          </div>
           <div style={{display:"grid",gridTemplateColumns:`repeat(auto-fill,minmax(140px,1fr))`,gap:10,marginBottom:16}}>
-            {(()=>{const totalLiqUSD=mySettlements.reduce((a,s)=>a+s.totalEarned,0);const totalLiqARS=mySettlements.reduce((a,s)=>a+calcArsSettled(classes,s.periodStart,s.periodEnd,viewStaff.id),0);const liqSub=totalLiqARS>0?`+$${totalLiqARS.toLocaleString("es-AR")} ARS`:null;const aCobrarProp=myClasses.filter(c=>c.scenario==="own_class"&&c.currency!=="ARS").reduce((a,c)=>a+(c.amount-c.paidAmount),0);const aCobrarPropARS=myClasses.filter(c=>c.scenario==="own_class"&&c.currency==="ARS").reduce((a,c)=>a+(c.amount-c.paidAmount),0);const aCobrarSub=aCobrarPropARS>0?`+$${aCobrarPropARS.toLocaleString("es-AR")} ARS`:null;return[["A Pagar",fmt(pendingPast),T.gold,pendingARS>0?`+$${pendingARS.toLocaleString("es-AR")} ARS pend.`:null],["Liquidado",fmt(totalLiqUSD),T.green,liqSub],["Clases",myClasses.length,T.text,`${clasesPropias} prop. · ${clasesAsignadas} asig.`],...(clasesPropias>0?[["A cobrar",fmt(aCobrarProp),T.orange,aCobrarSub]]:[]),...(isSeller?[["Clientes",myClients.length,T.cyan,null]]:[])];
+            {(()=>{const totalLiqUSD=mySettlements.reduce((a,s)=>a+s.totalEarned,0);const totalLiqARS=mySettlements.reduce((a,s)=>a+calcArsSettled(classes,s.periodStart,s.periodEnd,viewStaff.id),0);const liqSub=totalLiqARS>0?`+$${totalLiqARS.toLocaleString("es-AR")} ARS`:null;const aCobrarProp=myClasses.filter(c=>c.scenario==="own_class"&&c.currency!=="ARS").reduce((a,c)=>a+(c.amount-c.paidAmount),0);const aCobrarPropARS=myClasses.filter(c=>c.scenario==="own_class"&&c.currency==="ARS").reduce((a,c)=>a+(c.amount-c.paidAmount),0);const aCobrarSub=aCobrarPropARS>0?`+$${aCobrarPropARS.toLocaleString("es-AR")} ARS`:null;return[["A Pagar",fmt(pendingPast),T.gold,pendingARS>0?`+$${pendingARS.toLocaleString("es-AR")} ARS pend.`:null],["Liquidado",fmt(totalLiqUSD),T.green,liqSub],["Clases",statsClasses.length,T.text,`${clasesPropias} prop. · ${clasesAsignadas} asig.`],...(isInstructor?[["Hs. Propias",`${horasPropias}h`,T.cyan,null],["Hs. Escuela",`${horasEscuela}h`,T.purple,null]]:[]),...(clasesPropias>0?[["A cobrar",fmt(aCobrarProp),T.orange,aCobrarSub]]:[]),...(isSeller?[["Clientes",myClients.length,T.cyan,null]]:[])];
 })().map(([l,v,c,s])=>(
               <div key={l} style={{background:T.surface,borderRadius:10,padding:"12px 14px",textAlign:"center"}}>
                 <div style={{fontSize:10,color:T.textDim,textTransform:"uppercase"}}>{l}</div>
